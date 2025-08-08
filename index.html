@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RootGrowings</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b6b2f">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: #f6f8f7; color: #0b2d18; }
+    header { position: sticky; top: 0; background: #0b6b2f; color: white; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+    header h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+    header button { margin-left: auto; padding: 8px 12px; border: 0; border-radius: 8px; background: #fff; color: #0b6b2f; font-weight: 600; cursor: pointer; }
+    main { padding: 16px; max-width: 980px; margin: 0 auto; }
+    .row { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 14px; }
+    .card { background: #fff; border-radius: 14px; padding: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.05); display: flex; flex-direction: column; }
+    .photo { width: 100%; aspect-ratio: 1/1; border-radius: 10px; background: #e8efe9 center/cover no-repeat; }
+    .title { margin-top: 10px; display: flex; justify-content: space-between; align-items: baseline; }
+    .name { font-weight: 700; font-size: 16px; }
+    .nick { color: #46795b; font-size: 12px; }
+    .meta { margin-top: 6px; font-size: 12px; color: #355747; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; margin-top: 6px; }
+    .due { background: #ffeaea; color: #b00020; }
+    .soon { background: #fff7e1; color: #7a4e00; }
+    .ok { background: #e9fbef; color: #0b6b2f; }
+    .actions { margin-top: 10px; display: flex; gap: 8px; }
+    .actions button { flex: 1; border: 0; padding: 8px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .primary { background: #0b6b2f; color: white; }
+    .ghost { background: #eef4f0; color: #0b2d18; }
+    .empty { text-align: center; color: #507a65; padding: 60px 10px; }
+    .footer { text-align: center; font-size: 12px; color: #507a65; padding: 16px; }
+    dialog { border: 0; border-radius: 12px; width: min(520px, 92vw); }
+    form { display: grid; gap: 10px; padding: 10px; }
+    label { font-size: 12px; color: #355747; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cfe0d6; border-radius: 8px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon-192.png" width="24" height="24" alt="">
+    <h1>RootGrowings</h1>
+    <button id="addBtn">Add plant</button>
+  </header>
+  <main>
+    <section id="status"></section>
+    <div class="row" id="grid"></div>
+    <div class="empty" id="empty" hidden>
+      Add your first plant to get watering reminders.
+    </div>
+  </main>
+  <div class="footer">Install this site to your home screen for a full app experience.</div>
+
+  <dialog id="plantDialog">
+    <form id="plantForm" method="dialog">
+      <h3>Add plant</h3>
+      <div class="row2">
+        <div>
+          <label>Name</label>
+          <input name="name" required placeholder="Monstera">
+        </div>
+        <div>
+          <label>Nickname</label>
+          <input name="nickname" placeholder="Mo">
+        </div>
+      </div>
+      <label>Photo</label>
+      <input name="photo" type="file" accept="image/*">
+      <div class="row2">
+        <div>
+          <label>Plant type</label>
+          <input name="plantType" placeholder="Monstera deliciosa">
+        </div>
+        <div>
+          <label>Pot size cm</label>
+          <input name="potSize" type="number" min="5" max="40" step="1" value="15">
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label>Light level</label>
+          <select name="lightLevel">
+            <option value="medium">Medium</option>
+            <option value="bright">Bright</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div>
+          <label>Schedule</label>
+          <select name="scheduleMode">
+            <option value="suggested">Suggested</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label>Custom interval days</label>
+          <input name="customIntervalDays" type="number" min="2" max="60" value="10">
+        </div>
+        <div>
+          <label>Notes</label>
+          <input name="notes" placeholder="South window">
+        </div>
+      </div>
+      <menu>
+        <button value="cancel">Cancel</button>
+        <button value="default" class="primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
