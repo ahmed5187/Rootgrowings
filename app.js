@@ -3,6 +3,9 @@ const $ = (s) => document.querySelector(s);
 const grid = $("#grid");
 const empty = $("#empty");
 const addBtn = $("#addBtn");
+const exportBtn = $("#exportBtn");
+const importBtn = $("#importBtn");
+const importFile = $("#importFile");
 const dialog = $("#plantDialog");
 const form = $("#plantForm");
 
@@ -120,7 +123,22 @@ function render() {
       save(); render();
       toast("Skipped for a week");
     };
-    act.append(water, snooze, skip);
+    
+    const edit = document.createElement("button");
+    edit.className = "ghost";
+    edit.textContent = "Edit";
+    edit.onclick = () => openEdit(p.id);
+
+    const del = document.createElement("button");
+    del.className = "ghost";
+    del.textContent = "Delete";
+    del.onclick = () => {
+      plants = plants.filter(x => x.id !== p.id);
+      save(); render();
+    };
+
+    act.append(water, snooze, skip, edit, del);
+
     card.append(img, t, meta, act);
     grid.append(card);
   }
@@ -139,31 +157,47 @@ addBtn.addEventListener("click", () => dialog.showModal());
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(form);
+  const editing = form.dataset.editing || "";
   const file = fd.get("photo");
   let photoUrl = "";
   if (file && file.size) {
     photoUrl = await fileToDataUrl(file);
   }
-  const p = {
-    id: crypto.randomUUID(),
-    name: fd.get("name"),
-    nickname: fd.get("nickname") || "",
-    photoUrl,
-    plantType: fd.get("plantType") || "",
-    potSize: Number(fd.get("potSize") || 15),
-    lightLevel: fd.get("lightLevel") || "medium",
-    scheduleMode: fd.get("scheduleMode") || "suggested",
-    customIntervalDays: Number(fd.get("customIntervalDays") || 10),
-    notes: fd.get("notes") || "",
-    lastWateredUtc: new Date().toISOString(),
-    skipUntilUtc: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  setNextDue(p);
-  plants.push(p);
+  if (editing) {
+    const p = plants.find(x => x.id === editing);
+    p.name = fd.get("name");
+    p.nickname = fd.get("nickname") || "";
+    if (photoUrl) p.photoUrl = photoUrl;
+    p.plantType = fd.get("plantType") || "";
+    p.potSize = Number(fd.get("potSize") || 15);
+    p.lightLevel = fd.get("lightLevel") || "medium";
+    p.scheduleMode = fd.get("scheduleMode") || "suggested";
+    p.customIntervalDays = Number(fd.get("customIntervalDays") || 10);
+    p.updatedAt = new Date().toISOString();
+    setNextDue(p);
+  } else {
+    const p = {
+      id: crypto.randomUUID(),
+      name: fd.get("name"),
+      nickname: fd.get("nickname") || "",
+      photoUrl,
+      plantType: fd.get("plantType") || "",
+      potSize: Number(fd.get("potSize") || 15),
+      lightLevel: fd.get("lightLevel") || "medium",
+      scheduleMode: fd.get("scheduleMode") || "suggested",
+      customIntervalDays: Number(fd.get("customIntervalDays") || 10),
+      notes: fd.get("notes") || "",
+      lastWateredUtc: new Date().toISOString(),
+      skipUntilUtc: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setNextDue(p);
+    plants.push(p);
+  }
   save();
   form.reset();
+  delete form.dataset.editing;
   dialog.close();
   render();
 });
@@ -177,12 +211,27 @@ async function fileToDataUrl(file) {
   });
 }
 
+
+function openEdit(id) {
+  const p = plants.find(x => x.id === id);
+  if (!p) return;
+  dialog.showModal();
+  form.querySelector('[name="name"]').value = p.name;
+  form.querySelector('[name="nickname"]').value = p.nickname;
+  form.querySelector('[name="plantType"]').value = p.plantType;
+  form.querySelector('[name="potSize"]').value = p.potSize;
+  form.querySelector('[name="lightLevel"]').value = p.lightLevel;
+  form.querySelector('[name="scheduleMode"]').value = p.scheduleMode;
+  form.querySelector('[name="customIntervalDays"]').value = p.customIntervalDays;
+  form.dataset.editing = id;
+}
+
 // PWA support
 let registration = null;
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      registration = await navigator.serviceWorker.register("./service-worker.js");
+      registration = await navigator.serviceWorker.register("./service-worker.js", { scope: location.pathname });
       console.log("SW registered");
     } catch (e) {
       console.log("SW failed", e);
@@ -193,6 +242,26 @@ if ("serviceWorker" in navigator) {
 if ("Notification" in window) {
   Notification.requestPermission();
 }
+
+
+exportBtn.onclick = () => {
+  const blob = new Blob([JSON.stringify(plants, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "rootgrowings.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+importBtn.onclick = () => importFile.click();
+
+importFile.addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const data = JSON.parse(text);
+  if (Array.isArray(data)) { plants = data; save(); render(); }
+});
 
 // Seed a couple of demo plants on first run
 if (!plants.length) {
