@@ -1,7 +1,9 @@
-/* RootGrowings grouped UI v2 */
+/* RootGrowings grouped UI v3 */
 const $ = (s) => document.querySelector(s);
 
 /* Pages and nav */
+const homeTitle = $("#homeTitle");
+const settingsTitle = $("#settingsTitle");
 const homePage = $("#homePage");
 const settingsPage = $("#settingsPage");
 const chatPage = $("#chatPage");
@@ -25,24 +27,38 @@ const addRoomDialog = $("#addRoomDialog");
 const addRoomForm = $("#addRoomForm");
 const addRoomCancel = $("#addRoomCancel");
 const iconGrid = $("#iconGrid");
+
+const editRoomDialog = $("#editRoomDialog");
+const editRoomForm = $("#editRoomForm");
+const editRoomCancel = $("#editRoomCancel");
+const roomEditSelect = $("#roomEditSelect");
+const iconGridEdit = $("#iconGridEdit");
+
 const removeRoomDialog = $("#removeRoomDialog");
 const removeRoomForm = $("#removeRoomForm");
 const roomRemoveSelect = $("#roomRemoveSelect");
 
-/* Plant remove dialog */
+/* Plant edit/remove chooser */
+const editPlantChooser = $("#editPlantChooser");
+const editPlantChooserForm = $("#editPlantChooserForm");
+const editPlantCancel = $("#editPlantCancel");
+const plantEditSelect = $("#plantEditSelect");
+
 const removePlantDialog = $("#removePlantDialog");
 const removePlantForm = $("#removePlantForm");
 const plantRemoveSelect = $("#plantRemoveSelect");
 
 /* Settings buttons */
 const btnAddRoom = $("#btnAddRoom");
+const btnEditRoom = $("#btnEditRoom");
 const btnRemoveRoom = $("#btnRemoveRoom");
 const btnAddPlant = $("#btnAddPlant");
+const btnEditPlant = $("#btnEditPlant");
 const btnRemovePlant = $("#btnRemovePlant");
 
 /* DB */
-const DB_PLANTS = "rg_plants_v3";
-const DB_ROOMS = "rg_rooms_v2"; // stores array of {name, icon}
+const DB_PLANTS = "rg_plants_v4";
+const DB_ROOMS = "rg_rooms_v3"; // stores array of {name, icon}
 let plants = load(DB_PLANTS) || [];
 let rooms = load(DB_ROOMS) || [
   { name:"Bedroom", icon:"🛏️" },
@@ -112,7 +128,6 @@ function renderHome(){
       const card = document.createElement("div");
       card.className="card";
 
-      // gear for settings
       const gear = document.createElement("button");
       gear.className="gear";
       gear.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.5-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.2l-.4 2.6c-.6.2-1.2.5-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.2 1.2-.5 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.6.1-1Z" fill="currentColor"/></svg>`;
@@ -160,9 +175,9 @@ function activate(page){
   for(const el of document.querySelectorAll(".page")) el.classList.remove("active");
   page.classList.add("active");
   for(const b of [navHome,navSettings,navChat]) b.classList.remove("active");
-  if(page===homePage) navHome.classList.add("active");
-  if(page===settingsPage) navSettings.classList.add("active");
-  if(page===chatPage) navChat.classList.add("active");
+  if(page===homePage) { navHome.classList.add("active"); plusBtn.style.display="block"; homeTitle.style.display="block"; settingsTitle.style.display="none"; }
+  if(page===settingsPage) { navSettings.classList.add("active"); plusBtn.style.display="none"; homeTitle.style.display="none"; settingsTitle.style.display="block"; }
+  if(page===chatPage) { navChat.classList.add("active"); plusBtn.style.display="none"; homeTitle.style.display="none"; settingsTitle.style.display="none"; }
   window.scrollTo({top:0, behavior:"instant"});
 }
 navHome.onclick=()=>activate(homePage);
@@ -199,7 +214,7 @@ deletePlantBtn.onclick=()=>{
   plants = plants.filter(x=>x.id!==id);
   save(DB_PLANTS, plants);
   dialog.close(); renderHome();
-}
+};
 
 /* Form submit */
 form.addEventListener("submit", async (e)=>{
@@ -254,31 +269,43 @@ async function fileToDataUrl(file){
 }
 
 /* Settings buttons logic */
-btnAddRoom.onclick=()=>{
-  populateIconGrid();
-  addRoomForm.reset();
-  addRoomDialog.showModal();
-};
-btnRemoveRoom.onclick=()=>{
-  renderRemoveRoomOptions();
-  removeRoomDialog.showModal();
-};
+btnAddRoom.onclick=()=>{ populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
+btnEditRoom.onclick=()=>{ renderRoomEditOptions(); populateIconGrid(iconGridEdit); editRoomDialog.showModal(); };
+btnRemoveRoom.onclick=()=>{ renderRemoveRoomOptions(); removeRoomDialog.showModal(); };
 btnAddPlant.onclick=()=> openAdd();
-btnRemovePlant.onclick=()=>{
-  renderRemovePlantOptions();
-  removePlantDialog.showModal();
-};
+btnEditPlant.onclick=()=>{ renderEditPlantOptions(); editPlantChooser.showModal(); };
+btnRemovePlant.onclick=()=>{ renderRemovePlantOptions(); removePlantDialog.showModal(); };
 
+/* Close handlers */
 addRoomCancel.onclick=()=> addRoomDialog.close();
-removeRoomDialog.querySelector("#removeRoomCancel").onclick=()=> removeRoomDialog.close();
-removePlantDialog.querySelector("#removePlantCancel").onclick=()=> removePlantDialog.close();
+$("#editRoomCancel").onclick=()=> editRoomDialog.close();
+$("#removeRoomCancel").onclick=()=> removeRoomDialog.close();
+$("#editPlantCancel").onclick=()=> editPlantChooser.close();
+$("#removePlantCancel").onclick=()=> removePlantDialog.close();
 
-/* Add room submit with icon */
+/* Room icons */
+function populateIconGrid(container){
+  const icons = ["🛏️","🛋️","🍽️","🚿","🧺","🧑‍🍳","🖥️","🎮","📚","🧸","🚪","🌿","🔥","❄️","☕","🎧"];
+  container.innerHTML = "";
+  icons.forEach(ic=>{
+    const div = document.createElement("div");
+    div.className="iconPick";
+    div.textContent = ic;
+    div.onclick = ()=>{
+      for(const el of container.querySelectorAll(".iconPick")) el.classList.remove("selected");
+      div.classList.add("selected");
+      container.dataset.icon = ic;
+    };
+    container.append(div);
+  });
+}
+
+/* Add room submit */
 addRoomForm.addEventListener("submit", (e)=>{
   e.preventDefault();
   const fd = new FormData(addRoomForm);
   const name = (fd.get("roomName")||"").toString().trim();
-  const icon = addRoomForm.dataset.icon || "🏷️";
+  const icon = addRoomForm.querySelector(".iconPick.selected")?.textContent || "🏷️";
   if(!name) return;
   if(!rooms.find(r=>r.name===name)){
     rooms.push({name, icon});
@@ -289,7 +316,37 @@ addRoomForm.addEventListener("submit", (e)=>{
   addRoomDialog.close();
 });
 
-/* Remove room */
+/* Edit room submit */
+function renderRoomEditOptions(){
+  roomEditSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join("");
+}
+editRoomForm.addEventListener("submit", (e)=>{
+  e.preventDefault();
+  const fd = new FormData(editRoomForm);
+  const oldName = fd.get("roomToEdit");
+  const newName = (fd.get("newRoomName")||"").toString().trim();
+  const newIcon = iconGridEdit.querySelector(".iconPick.selected")?.textContent;
+  const r = rooms.find(x=>x.name===oldName);
+  if(!r) return;
+  // rename room
+  if(newName && newName !== oldName){
+    r.name = newName;
+    // update all plants that had old name
+    for(const p of plants){ if(p.location===oldName) p.location = newName; }
+  }
+  // change icon
+  if(newIcon) r.icon = newIcon;
+  save(DB_ROOMS, rooms);
+  save(DB_PLANTS, plants);
+  renderRoomOptions();
+  renderHome();
+  editRoomDialog.close();
+});
+
+/* Remove room submit */
+function renderRemoveRoomOptions(){
+  roomRemoveSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join("");
+}
 removeRoomForm.addEventListener("submit", (e)=>{
   e.preventDefault();
   const fd = new FormData(removeRoomForm);
@@ -297,7 +354,6 @@ removeRoomForm.addEventListener("submit", (e)=>{
   if(!name) return;
   rooms = rooms.filter(r => r.name !== name);
   save(DB_ROOMS, rooms);
-  // move plants to Unassigned
   for(const p of plants){ if(p.location===name) p.location = "Unassigned"; }
   save(DB_PLANTS, plants);
   renderRoomOptions();
@@ -305,7 +361,23 @@ removeRoomForm.addEventListener("submit", (e)=>{
   removeRoomDialog.close();
 });
 
+/* Edit Plant chooser */
+function renderEditPlantOptions(){
+  plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||"Unassigned"})</option>`).join("");
+}
+editPlantChooserForm.addEventListener("submit", (e)=>{
+  e.preventDefault();
+  const fd = new FormData(editPlantChooserForm);
+  const id = fd.get("plantToEdit");
+  if(!id) return;
+  editPlantChooser.close();
+  openEdit(id);
+});
+
 /* Remove plant */
+function renderRemovePlantOptions(){
+  plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||"Unassigned"})</option>`).join("");
+}
 removePlantForm.addEventListener("submit", (e)=>{
   e.preventDefault();
   const fd = new FormData(removePlantForm);
@@ -317,27 +389,9 @@ removePlantForm.addEventListener("submit", (e)=>{
   removePlantDialog.close();
 });
 
-/* Helpers for option renders */
-function renderRemoveRoomOptions(){
-  roomRemoveSelect.innerHTML = allRoomNames().map(n=>`<option value="${n}">${n}</option>`).join("");
-}
-function renderRemovePlantOptions(){
-  plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||"Unassigned"})</option>`).join("");
-}
-function populateIconGrid(){
-  const icons = ["🛏️","🛋️","🍽️","🚿","🧺","🧑‍🍳","🖥️","🎮","📚","🧸","🚪","🌿","🔥","❄️","☕","🎧"];
-  iconGrid.innerHTML = "";
-  icons.forEach(ic=>{
-    const div = document.createElement("div");
-    div.className="iconPick";
-    div.textContent = ic;
-    div.onclick = ()=>{
-      for(const el of iconGrid.querySelectorAll(".iconPick")) el.classList.remove("selected");
-      div.classList.add("selected");
-      addRoomForm.dataset.icon = ic;
-    };
-    iconGrid.append(div);
-  });
+/* Room/Plant shared */
+function renderRoomOptions(){
+  roomSelect.innerHTML = allRoomNames().map(r => `<option value="${r}">${r}</option>`).join("");
 }
 
 /* Seed demo */

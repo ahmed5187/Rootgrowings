@@ -13,7 +13,7 @@
     header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e2eee7; z-index: 3; }
     header img.logo { width: 28px; height: 28px; border-radius: 6px; }
     header .spacer { flex: 1; }
-    .fab { position: fixed; top: 10px; right: 12px; width: 44px; height: 44px; border-radius: 999px; background: var(--green); color: #fff; border: 0; font-size: 28px; line-height: 44px; text-align: center; cursor: pointer; z-index: 4; }
+    .fab { position: fixed; top: 10px; right: 12px; width: 44px; height: 44px; border-radius: 999px; background: var(--green); color: #fff; border: 0; font-size: 28px; line-height: 44px; text-align: center; cursor: pointer; z-index: 4; display:block; }
     main { padding: 10px 12px 92px; max-width: 860px; margin: 0 auto; }
     h1.title { margin: 6px 2px 8px; font-size: 22px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
     .section { margin: 10px 0 18px; }
@@ -62,7 +62,7 @@
   <button class="fab" id="plusBtn">+</button>
 
   <main>
-    <h1 class="title">My Plants</h1>
+    <h1 class="title" id="homeTitle">My Plants</h1>
     <section id="homePage" class="page active">
       <div id="homeContent"></div>
       <div class="empty" id="homeEmpty" hidden>
@@ -70,17 +70,20 @@
       </div>
     </section>
 
+    <h1 class="title" id="settingsTitle" style="display:none">My Settings</h1>
     <section id="settingsPage" class="page">
       <div class="settings">
         <h3>Rooms</h3>
         <div class="btnRow">
           <button class="btn primary" id="btnAddRoom">Add a Room</button>
+          <button class="btn ghost" id="btnEditRoom">Edit a Room</button>
           <button class="btn ghost" id="btnRemoveRoom">Remove a Room</button>
         </div>
 
         <h3>Plants</h3>
         <div class="btnRow">
           <button class="btn primary" id="btnAddPlant">Add a Plant</button>
+          <button class="btn ghost" id="btnEditPlant">Edit a Plant</button>
           <button class="btn ghost" id="btnRemovePlant">Remove a Plant</button>
         </div>
       </div>
@@ -184,6 +187,23 @@
     </form>
   </dialog>
 
+  <!-- Edit room dialog -->
+  <dialog id="editRoomDialog">
+    <form id="editRoomForm" method="dialog">
+      <h3>Edit a Room</h3>
+      <label>Select room</label>
+      <select name="roomToEdit" id="roomEditSelect"></select>
+      <label>New name</label>
+      <input name="newRoomName" placeholder="New name">
+      <label>Choose new icon</label>
+      <div class="iconGrid" id="iconGridEdit"></div>
+      <menu>
+        <button type="button" id="editRoomCancel" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
   <!-- Remove room dialog -->
   <dialog id="removeRoomDialog">
     <form id="removeRoomForm" method="dialog">
@@ -194,6 +214,19 @@
       <menu>
         <button type="button" id="removeRoomCancel" class="btn ghost">Cancel</button>
         <button type="submit" class="btn primary">Remove</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Edit plant chooser dialog -->
+  <dialog id="editPlantChooser">
+    <form id="editPlantChooserForm" method="dialog">
+      <h3>Edit a Plant</h3>
+      <label>Select plant</label>
+      <select name="plantToEdit" id="plantEditSelect"></select>
+      <menu>
+        <button type="button" id="editPlantCancel" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Edit</button>
       </menu>
     </form>
   </dialog>
