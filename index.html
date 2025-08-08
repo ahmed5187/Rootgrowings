@@ -10,20 +10,24 @@
     * { box-sizing: border-box; }
     :root { --green:#0b6b2f; --green2:#2e7d4e; --bg:#f6f8f7; --ink:#0b2d18; }
     body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: var(--bg); color: var(--ink); }
-    header { position: sticky; top: 0; background: var(--bg); padding: 14px 16px 8px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e2eee7; z-index: 3; }
-    header h1 { margin: 0; font-size: 20px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
+    header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e2eee7; z-index: 3; }
+    header img.logo { width: 28px; height: 28px; border-radius: 6px; }
     header .spacer { flex: 1; }
-    .fab { position: fixed; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 999px; background: var(--green); color: #fff; border: 0; font-size: 28px; line-height: 44px; text-align: center; cursor: pointer; z-index: 4; }
-    main { padding: 10px 12px 72px; max-width: 840px; margin: 0 auto; }
+    .fab { position: fixed; top: 10px; right: 12px; width: 44px; height: 44px; border-radius: 999px; background: var(--green); color: #fff; border: 0; font-size: 28px; line-height: 44px; text-align: center; cursor: pointer; z-index: 4; }
+    main { padding: 10px 12px 92px; max-width: 860px; margin: 0 auto; }
+    h1.title { margin: 6px 2px 8px; font-size: 22px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
     .section { margin: 10px 0 18px; }
-    .section h3 { margin: 10px 4px; font-size: 15px; color: #4a7c63; font-weight: 700; }
+    .section h3 { margin: 10px 4px; font-size: 15px; color: #4a7c63; font-weight: 800; display:flex; align-items:center; gap:8px; }
+    .roomIcon { width: 18px; height:18px; display:inline-grid; place-items:center; background:#eaf5ef; border-radius:6px; font-size:12px; }
     .group { background: #eaf5ef; border-radius: 16px; padding: 10px; }
     .row { display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 10px; }
-    .card { background: #fff; border-radius: 16px; padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.05); display: grid; gap: 8px; align-content: start; }
+    .card { background: #fff; border-radius: 16px; padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.05); display: grid; gap: 8px; align-content: start; position: relative; }
     .photoWrap { position: relative; }
     .photo { width: 100%; aspect-ratio: 1/1; border-radius: 12px; background: #e8efe9 center/cover no-repeat; }
     .ring { position: absolute; top: 8px; left: 8px; width: 42px; height: 42px; border-radius: 50%; background: conic-gradient(var(--green2) var(--pct), #e5ece7 0); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--green); }
     .ring span { background: #fff; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; }
+    .gear { position:absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; border:0; background:#ffffffcc; display:grid; place-items:center; cursor:pointer; }
+    .gear svg { width: 16px; height:16px; color:#4a7c63; }
     .name { font-weight: 800; font-size: 14px; }
     .nick { color: #46795b; font-size: 12px; }
     .meta { font-size: 11px; color: #355747; }
@@ -32,33 +36,33 @@
     .btn.primary { background: var(--green); color:#fff; }
     .btn.ghost { background: #eef4f0; color: var(--ink); }
     .empty { text-align: center; color: #507a65; padding: 40px 10px; }
-    /* bottom nav */
     nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e2eee7; display: grid; grid-template-columns: repeat(3,1fr); padding: 8px 10px; z-index: 5; }
     nav button { background: transparent; border: 0; padding: 8px; font-size: 12px; color: #4a7c63; display: grid; place-items: center; gap: 4px; cursor: pointer; }
     .navIcon { width: 22px; height: 22px; }
     .active { color: var(--green); font-weight: 800; }
-    /* pages */
     .page { display: none; }
     .page.active { display: block; }
-    /* settings simple styles */
-    .settings { display: grid; gap: 10px; }
+    .settings { display: grid; gap: 12px; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     input, select { width: 100%; padding: 10px; border: 1px solid #cfe0d6; border-radius: 8px; }
     label { font-size: 12px; color: #355747; }
-    .hint { font-size: 12px; color:#507a65; }
+    .btnRow { display:flex; gap:10px; flex-wrap:wrap; }
     dialog { border: 0; border-radius: 12px; width: min(520px, 92vw); }
     menu { display: flex; justify-content: end; gap: 8px; }
+    .iconGrid { display:grid; grid-template-columns: repeat(8, 1fr); gap:8px; }
+    .iconPick { border:1px solid #cfe0d6; border-radius:8px; padding:6px; cursor:pointer; background:#fff; }
+    .iconPick.selected { outline:2px solid var(--green); }
   </style>
 </head>
 <body>
   <header>
-    <h1>My Plants</h1>
+    <img class="logo" src="icons/icon-192.png" alt="RootGrowings">
     <div class="spacer"></div>
   </header>
   <button class="fab" id="plusBtn">+</button>
 
   <main>
-    <!-- Home -->
+    <h1 class="title">My Plants</h1>
     <section id="homePage" class="page active">
       <div id="homeContent"></div>
       <div class="empty" id="homeEmpty" hidden>
@@ -66,21 +70,22 @@
       </div>
     </section>
 
-    <!-- Settings -->
     <section id="settingsPage" class="page">
       <div class="settings">
-        <h3>Add a room</h3>
-        <div class="row2">
-          <input id="roomName" placeholder="Bedroom">
-          <button class="btn primary" id="addRoomBtn">Save room</button>
+        <h3>Rooms</h3>
+        <div class="btnRow">
+          <button class="btn primary" id="btnAddRoom">Add a Room</button>
+          <button class="btn ghost" id="btnRemoveRoom">Remove a Room</button>
         </div>
-        <div class="hint">Rooms help group plants on the home screen.</div>
-        <h3>Add a plant</h3>
-        <button class="btn ghost" id="openAddPlant">Open Add plant form</button>
+
+        <h3>Plants</h3>
+        <div class="btnRow">
+          <button class="btn primary" id="btnAddPlant">Add a Plant</button>
+          <button class="btn ghost" id="btnRemovePlant">Remove a Plant</button>
+        </div>
       </div>
     </section>
 
-    <!-- Chat -->
     <section id="chatPage" class="page">
       <div class="empty">
         Chat with us is coming soon!
@@ -103,10 +108,10 @@
     </button>
   </nav>
 
-  <!-- Add plant dialog re used -->
+  <!-- Add/Edit plant dialog -->
   <dialog id="plantDialog">
     <form id="plantForm" method="dialog">
-      <h3>Add plant</h3>
+      <h3 id="plantDialogTitle">Add plant</h3>
       <div class="row2">
         <div>
           <label>Name</label>
@@ -157,8 +162,51 @@
         </div>
       </div>
       <menu>
-        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="button" id="deletePlantBtn" class="btn ghost" style="margin-right:auto; display:none">Delete</button>
+        <button type="button" id="cancelBtn" class="btn ghost">Cancel</button>
         <button type="submit" class="btn primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Add room dialog -->
+  <dialog id="addRoomDialog">
+    <form id="addRoomForm" method="dialog">
+      <h3>Add a Room</h3>
+      <label>Room name</label>
+      <input name="roomName" required placeholder="Bedroom">
+      <label>Choose icon</label>
+      <div class="iconGrid" id="iconGrid"></div>
+      <menu>
+        <button type="button" id="addRoomCancel" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Remove room dialog -->
+  <dialog id="removeRoomDialog">
+    <form id="removeRoomForm" method="dialog">
+      <h3>Remove a Room</h3>
+      <label>Select room to remove</label>
+      <select name="roomToRemove" id="roomRemoveSelect"></select>
+      <p class="meta">Plants in the removed room will move to Unassigned.</p>
+      <menu>
+        <button type="button" id="removeRoomCancel" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Remove</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Remove plant dialog -->
+  <dialog id="removePlantDialog">
+    <form id="removePlantForm" method="dialog">
+      <h3>Remove a Plant</h3>
+      <label>Select plant</label>
+      <select name="plantToRemove" id="plantRemoveSelect"></select>
+      <menu>
+        <button type="button" id="removePlantCancel" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Remove</button>
       </menu>
     </form>
   </dialog>
