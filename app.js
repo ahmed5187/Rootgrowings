@@ -14,6 +14,9 @@ const navSettings = $("#navSettings");
 const navChat = $("#navChat");
 const plusBtn = $("#plusBtn");
 
+// default plant image
+const DEFAULT_IMG = "assets/tempplant.jpg";
+
 /* Plant dialog */
 const dialog = $("#plantDialog");
 const form = $("#plantForm");
@@ -137,7 +140,7 @@ function renderHome(){
       photoWrap.className="photoWrap";
       const img = document.createElement("div");
       img.className="photo";
-      if(p.photoUrl) img.style.backgroundImage = `url('${p.photoUrl}')`;
+      img.style.backgroundImage = `url('${p.photoUrl || DEFAULT_IMG}')`;
       const ring = document.createElement("div");
       ring.className="ring";
       ring.style.setProperty("--pct", pct+"%");
@@ -228,7 +231,7 @@ form.addEventListener("submit", async (e)=>{
   if(editing){
     const p = plants.find(x=>x.id===editing);
     p.name = fd.get("name"); p.nickname = fd.get("nickname")||"";
-    if(photoUrl) p.photoUrl = photoUrl;
+    if(photoUrl) p.photoUrl = photoUrl; else if(!p.photoUrl) p.photoUrl = DEFAULT_IMG;
     p.plantType = fd.get("plantType")||"";
     p.location = fd.get("location")||rooms[0]?.name||"Unassigned";
     p.potSize = Number(fd.get("potSize")||15);
@@ -242,7 +245,7 @@ form.addEventListener("submit", async (e)=>{
       id: crypto.randomUUID(),
       name: fd.get("name"),
       nickname: fd.get("nickname")||"",
-      photoUrl,
+      photoUrl: photoUrl || DEFAULT_IMG,
       plantType: fd.get("plantType")||"",
       location: fd.get("location")||rooms[0]?.name||"Unassigned",
       potSize: Number(fd.get("potSize")||15),
@@ -409,7 +412,7 @@ if(!plants.length){
       id: crypto.randomUUID(),
       name: d.name,
       nickname: "",
-      photoUrl: "",
+      photoUrl: DEFAULT_IMG,
       plantType: d.plantType,
       location: d.location,
       potSize: 15,
