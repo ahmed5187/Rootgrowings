@@ -78,13 +78,19 @@
       padding: 14px 18px; border-radius: 12px; font-size: 14px;
       box-shadow: 0 10px 30px rgba(0,0,0,.12);
       opacity: 0; transition: opacity .25s ease, transform .25s ease;
-      z-index: 4; pointer-events: none;   /* important: does not block nav */
+      z-index: 4; pointer-events: none;
       display:flex; align-items:center; gap:10px;
     }
     .toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-    .toast .tick {
-      width:22px; height:22px; border-radius:999px; background:#fff; color:#14532d;
-      display:grid; place-items:center; font-weight:900;
+    .toast .tick { width:22px; height:22px; border-radius:999px; background:#fff; color:#14532d; display:grid; place-items:center; font-weight:900; }
+
+    /* Profile dialog */
+    .profileDialog::backdrop { background: rgba(0,0,0,.15); }
+    .profileCard { padding:18px 20px; background:#fff; border-radius:12px; width:min(420px,92vw); position:relative; }
+    .xBtn {
+      position:absolute; top:8px; right:8px; width:32px; height:32px;
+      border-radius:8px; border:1px solid #cfe0d6; background:#f4f8f6; cursor:pointer;
+      font-size:18px; line-height:30px;
     }
   </style>
 </head>
@@ -148,19 +154,36 @@
   </nav>
 
   <!-- Profile dialog -->
-  <dialog id="profileDialog">
-    <div style="text-align:center; padding:18px 20px 14px">
-      <div style="font-size:40px; line-height:1">👤</div>
-      <h3 id="profileName" style="margin:8px 0 4px"></h3>
-      <p id="profileEmail" style="color:#555; font-size:14px; margin:0 0 10px"></p>
-      <div style="display:flex; gap:8px; justify-content:center">
-        <button id="editProfileBtn" class="btn">Edit Info</button>
-        <button id="signOutBtn" class="btn ghost">Sign Out</button>
+  <dialog id="profileDialog" class="profileDialog">
+    <div class="profileCard">
+      <button id="profileClose" class="xBtn" aria-label="Close">×</button>
+
+      <!-- View mode -->
+      <div id="profileView" style="text-align:center; padding:10px 0 4px">
+        <div style="font-size:40px; line-height:1">👤</div>
+        <h3 id="profileName" style="margin:8px 0 4px"></h3>
+        <p id="profileEmail" style="color:#555; font-size:14px; margin:0 0 10px"></p>
+        <div class="btnRow" style="justify-content:center">
+          <button id="editProfileBtn" class="btn">Edit Info</button>
+          <button id="signOutBtn" class="btn ghost">Sign Out</button>
+        </div>
       </div>
+
+      <!-- Edit mode -->
+      <form id="profileForm" style="display:none">
+        <label>Display name</label>
+        <input id="profileNameInput" placeholder="Your name">
+        <label>Email</label>
+        <input id="profileEmailInput" disabled>
+        <menu>
+          <button type="button" id="cancelProfileBtn" class="btn ghost">Cancel</button>
+          <button type="submit" id="saveProfileBtn" class="btn primary">Save</button>
+        </menu>
+      </form>
     </div>
   </dialog>
 
-  <!-- Dialogs -->
+  <!-- CRUD dialogs (unchanged) -->
   <dialog id="plantDialog">
     <form id="plantForm" method="dialog">
       <h3 id="plantDialogTitle">Add plant</h3>
@@ -288,11 +311,11 @@
     </form>
   </dialog>
 
-  <!-- Center toast container -->
+  <!-- Center toast -->
   <div id="toast" class="toast"><span class="tick">✓</span><span id="toastText"></span></div>
 
   <script type="module">
-    import './app_cloud.js?v=8';
+    import './app_cloud.js?v=9';
   </script>
 </body>
 </html>
