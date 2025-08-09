@@ -10,12 +10,26 @@
     * { box-sizing: border-box; }
     :root { --green:#0b6b2f; --green2:#2e7d4e; --bg:#f6f8f7; --ink:#0b2d18; }
     body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: var(--bg); color: var(--ink); }
-    header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e2eee7; z-index: 3; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; background: var(--bg);
+      padding: 8px 12px; border-bottom: 1px solid #e2eee7; z-index: 3;
+    }
+    .headWrap { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     header img.logo { height: 28px; width: auto; }
-    header .spacer { flex: 1; }
-    .fab { position: fixed; top: 10px; right: 12px; width: 44px; height: 44px; border-radius: 999px; background: var(--green); color: #fff; border: 0; font-size: 28px; line-height: 44px; text-align: center; cursor: pointer; z-index: 4; display:block; }
+    .iconBar { display:flex; align-items:center; gap:10px; }
+    .iconBtn {
+      background:#eaf5ef; border:1px solid #cfe0d6; color:#14532d;
+      width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+      cursor:pointer; font-size:18px;
+    }
+    .iconBtn:hover { filter:brightness(.98); }
+
+    /* Main */
     main { padding: 10px 12px 92px; max-width: 860px; margin: 0 auto; }
     h1.title { margin: 6px 2px 8px; font-size: 22px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
+
     .section { margin: 10px 0 18px; }
     .section h3 { margin: 10px 4px; font-size: 15px; color: #4a7c63; font-weight: 800; display:flex; align-items:center; gap:8px; }
     .roomIcon { width: 18px; height:18px; display:inline-grid; place-items:center; background:#eaf5ef; border-radius:6px; font-size:12px; }
@@ -36,12 +50,18 @@
     .btn.primary { background: var(--green); color:#fff; }
     .btn.ghost { background: #eef4f0; color: var(--ink); }
     .empty { text-align: center; color: #507a65; padding: 40px 10px; }
+
+    /* Bottom nav */
     nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e2eee7; display: grid; grid-template-columns: repeat(3,1fr); padding: 8px 10px; z-index: 5; }
     nav button { background: transparent; border: 0; padding: 8px; font-size: 12px; color: #4a7c63; display: grid; place-items: center; gap: 4px; cursor: pointer; }
     .navIcon { width: 22px; height: 22px; }
     .active { color: var(--green); font-weight: 800; }
+
+    /* Pages */
     .page { display: none; }
     .page.active { display: block; }
+
+    /* Settings forms */
     .settings { display: grid; gap: 12px; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     input, select { width: 100%; padding: 10px; border: 1px solid #cfe0d6; border-radius: 8px; }
@@ -52,14 +72,28 @@
     .iconGrid { display:grid; grid-template-columns: repeat(8, 1fr); gap:8px; }
     .iconPick { border:1px solid #cfe0d6; border-radius:8px; padding:6px; cursor:pointer; background:#fff; }
     .iconPick.selected { outline:2px solid var(--green); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #14532d; color: #fff; padding: 10px 16px; border-radius: 8px;
+      font-size: 14px; opacity: 0; transition: opacity .25s ease; z-index: 9999;
+    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
   <header>
-    <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
-    <div class="spacer"></div>
+    <div class="headWrap">
+      <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
+      <div class="iconBar">
+        <!-- Plus button lives in header now -->
+        <button id="plusBtn" class="iconBtn" title="Add">➕</button>
+        <!-- Profile button -->
+        <button id="profileBtn" class="iconBtn" title="Profile">👤</button>
+      </div>
+    </div>
   </header>
-  <button class="fab" id="plusBtn">+</button>
 
   <main>
     <h1 class="title" id="homeTitle">My Plants</h1>
@@ -90,9 +124,7 @@
     </section>
 
     <section id="chatPage" class="page">
-      <div class="empty">
-        Chat with us is coming soon!
-      </div>
+      <div class="empty">Chat with us is coming soon!</div>
     </section>
   </main>
 
@@ -111,7 +143,20 @@
     </button>
   </nav>
 
-  <!-- Dialogs mirrored from v3 -->
+  <!-- Profile dialog -->
+  <dialog id="profileDialog">
+    <div style="text-align:center; padding:18px 20px 14px">
+      <div style="font-size:40px; line-height:1">👤</div>
+      <h3 id="profileName" style="margin:8px 0 4px"></h3>
+      <p id="profileEmail" style="color:#555; font-size:14px; margin:0 0 10px"></p>
+      <div style="display:flex; gap:8px; justify-content:center">
+        <button id="editProfileBtn" class="btn">Edit Info</button>
+        <button id="signOutBtn" class="btn ghost">Sign Out</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialogs -->
   <dialog id="plantDialog">
     <form id="plantForm" method="dialog">
       <h3 id="plantDialogTitle">Add plant</h3>
@@ -239,9 +284,11 @@
     </form>
   </dialog>
 
-  <script type="module">
-  import './app_cloud.js?v=2';
-</script>
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
 
+  <script type="module">
+    import './app_cloud.js?v=6';
+  </script>
 </body>
 </html>
