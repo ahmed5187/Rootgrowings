@@ -1,4 +1,9 @@
-// app_cloud.js (wrapped init + logs + popup fallback)
+// app_cloud.js (full app) — popup-first Google sign-in, redirect fallback,
+// persistence, full rooms/plants CRUD, uploads with 2MB cap.
+//
+// In index.html include as:
+// <script type="module" src="./app_cloud.js?v=6"></script>
+
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
@@ -17,7 +22,7 @@ import {
 const $ = s => document.querySelector(s);
 const DEFAULT_IMG = 'assets/tempplant.jpg';
 
-// build the overlay now
+// ---------- Build auth overlay ----------
 const authOverlay = document.createElement('div');
 authOverlay.id = 'authOverlay';
 authOverlay.style.cssText = `
@@ -37,6 +42,7 @@ authOverlay.innerHTML = `
 `;
 document.body.appendChild(authOverlay);
 
+// ---------- App shell refs ----------
 const headerEl = document.querySelector('header');
 const footerEl = document.querySelector('footer');
 const homePage = $('#homePage');
@@ -51,24 +57,29 @@ const settingsTitle = $('#settingsTitle');
 const homeContent = $('#homeContent');
 const homeEmpty = $('#homeEmpty');
 
+// dialogs + forms
 const dialog = $('#plantDialog');
 const form = $('#plantForm');
 const cancelBtn = $('#cancelBtn');
 const deletePlantBtn = $('#deletePlantBtn');
 const plantDialogTitle = $('#plantDialogTitle');
 const roomSelect = $('#roomSelect');
+
 const addRoomDialog = $('#addRoomDialog');
 const addRoomForm = $('#addRoomForm');
 const addRoomCancel = $('#addRoomCancel');
 const iconGrid = $('#iconGrid');
+
 const editRoomDialog = $('#editRoomDialog');
 const editRoomForm = $('#editRoomForm');
 const editRoomCancel = $('#editRoomCancel');
 const roomEditSelect = $('#roomEditSelect');
 const iconGridEdit = $('#iconGridEdit');
+
 const removeRoomDialog = $('#removeRoomDialog');
 const removeRoomForm = $('#removeRoomForm');
 const roomRemoveSelect = $('#roomRemoveSelect');
+
 const editPlantChooser = $('#editPlantChooser');
 const editPlantChooserForm = $('#editPlantChooserForm');
 const editPlantCancel = $('#editPlantCancel');
@@ -76,6 +87,7 @@ const removePlantDialog = $('#removePlantDialog');
 const removePlantForm = $('#removePlantForm');
 const plantEditSelect = $('#plantEditSelect');
 const plantRemoveSelect = $('#plantRemoveSelect');
+
 const btnAddRoom = $('#btnAddRoom');
 const btnEditRoom = $('#btnEditRoom');
 const btnRemoveRoom = $('#btnRemoveRoom');
@@ -91,8 +103,8 @@ function showAppFrame(show){
 }
 showAppFrame(false);
 
+// ---------- App init ----------
 (function init(){
-  // wrap all async work inside
   (async () => {
     console.log('[RG] init start');
     const app = initializeApp(firebaseConfig);
@@ -100,52 +112,56 @@ showAppFrame(false);
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    // keep session after redirect
     try {
       await setPersistence(auth, browserLocalPersistence);
       console.log('[RG] persistence set');
     } catch(e){ console.error('[RG] setPersistence error', e); }
 
-    // click handler
+    // POPUP FIRST — redirect fallback
     document.addEventListener('click', async e => {
       if (e.target && e.target.id === 'googleStart') {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
+
         try {
-          console.log('[RG] starting redirect sign-in');
-          await signInWithRedirect(auth, provider);
+          console.log('[RG] starting POPUP sign-in');
+          await signInWithPopup(auth, provider);
+          console.log('[RG] popup success');
         } catch (err) {
-          console.warn('[RG] redirect failed, trying popup', err?.message);
-          try { await signInWithPopup(auth, provider); }
-          catch (e2) { console.error('[RG] popup failed', e2); alert('Sign in failed. See console.'); }
+          console.warn('[RG] popup failed', err?.code, err?.message);
+          if (err?.code === 'auth/operation-not-supported-in-this-environment' ||
+              err?.code === 'auth/popup-blocked') {
+            try {
+              console.log('[RG] falling back to REDIRECT sign-in');
+              await signInWithRedirect(auth, provider);
+            } catch (e2) {
+              console.error('[RG] redirect failed', e2?.code, e2?.message);
+              alert('Sign in failed. See console for details.');
+            }
+          } else if (err?.code !== 'auth/popup-closed-by-user' &&
+                     err?.code !== 'auth/cancelled-popup-request') {
+            alert('Sign in failed. See console for details.');
+          }
         }
       }
     });
 
-    // complete redirect if we have one
+    // Handle redirect result if present
     try {
       const rr = await getRedirectResult(auth);
       console.log('[RG] getRedirectResult user:', rr?.user?.uid || '(none)');
-      if (rr?.user) {
-        bootstrapAfterLogin(rr.user);
-      }
-    } catch(err){
-      console.error('[RG] getRedirectResult error', err);
-    }
+      if (rr?.user) bootstrapAfterLogin(rr.user);
+    } catch(err){ console.error('[RG] getRedirectResult error', err); }
 
-    // auth state
+    // Auth state
     onAuthStateChanged(auth, (u) => {
       console.log('[RG] onAuthStateChanged:', u?.uid || '(no user)');
-      if (!u) {
-        showAppFrame(false);
-        authOverlay.style.display = 'flex';
-        return;
-      }
+      if (!u) { showAppFrame(false); authOverlay.style.display = 'flex'; return; }
       bootstrapAfterLogin(u);
     });
 
-    // one-time bootstrap
-    let bootstrapped = false;
+    // ------- Bootstrap once -------
+    let bootstrapped = false, rooms = [], plants = [];
     function bootstrapAfterLogin(u){
       if (bootstrapped) return;
       bootstrapped = true;
@@ -158,7 +174,7 @@ showAppFrame(false);
       startPlantsListener();
     }
 
-    // NAV
+    // ------- Nav -------
     function activate(page){
       for(const el of document.querySelectorAll('.page')) el.classList.remove('active');
       page.classList.add('active');
@@ -173,9 +189,7 @@ showAppFrame(false);
     if(navChat) navChat.onclick = () => activate(chatPage);
     if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
 
-    // LISTENERS
-    let rooms = [], plants = [];
-
+    // ------- Firestore live listeners -------
     function startRoomsListener(){
       const qref = collection(db, 'users', auth.currentUser.uid, 'rooms');
       onSnapshot(qref, snap => {
@@ -187,6 +201,7 @@ showAppFrame(false);
         renderRoomOptions(); renderHome(); renderPickers();
       });
     }
+
     function startPlantsListener(){
       const qref = collection(db, 'users', auth.currentUser.uid, 'plants');
       onSnapshot(qref, snap => {
@@ -195,7 +210,7 @@ showAppFrame(false);
       });
     }
 
-    // schedule helpers
+    // ------- Schedule helpers -------
     const baseIntervalDays = (t)=>({ 'Monstera deliciosa':7,'Epipremnum aureum':7,'Spathiphyllum':6,'Sansevieria':14,'Ficus elastica':10 }[t]||8);
     const lightFactor = v => v==='bright'?0.8 : v==='low'?1.2 : 1.0;
     const seasonFactor = d => { const m=d.getMonth()+1; if(m>=6&&m<=8) return 0.9; if(m===12||m<=2) return 1.1; return 1.0; };
@@ -207,15 +222,15 @@ showAppFrame(false);
     const allRoomNames = ()=> rooms.map(r=>r.name);
     const groupByRoom = list => { const map={}; for(const r of rooms) map[r.name]=[]; for(const p of list){ const rn=p.location||'Unassigned'; if(!map[rn]) map[rn]=[]; map[rn].push(p);} return map; };
 
-    // render
+    // ------- Render -------
     function renderRoomOptions(){
       roomSelect.innerHTML = allRoomNames().map(r=>`<option value="${r}">${r}</option>`).join('');
     }
     function renderPickers(){
-      $('#roomEditSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      $('#roomRemoveSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      $('#plantEditSelect').innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
-      $('#plantRemoveSelect').innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      roomEditSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+      roomRemoveSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+      plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
     }
     function renderHome(){
       const sorted=[...plants].sort((a,b)=>new Date(a.nextDueUtc)-new Date(b.nextDueUtc));
@@ -267,7 +282,7 @@ showAppFrame(false);
       }
     }
 
-    // icon grid
+    // ------- Icon grid -------
     function populateIconGrid(container){
       const icons=['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
       container.innerHTML=''; icons.forEach(ic=>{ const d=document.createElement('div'); d.className='iconPick'; d.textContent=ic;
@@ -275,7 +290,7 @@ showAppFrame(false);
       });
     }
 
-    // rooms
+    // ------- Rooms -------
     btnAddRoom.onclick = ()=>{ populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
     btnEditRoom.onclick = ()=>{ populateIconGrid(iconGridEdit); editRoomDialog.showModal(); };
     btnRemoveRoom.onclick = ()=> removeRoomDialog.showModal();
@@ -292,6 +307,7 @@ showAppFrame(false);
       await addDoc(collection(db,'users',auth.currentUser.uid,'rooms'),{ name, icon });
       addRoomDialog.close();
     });
+
     editRoomForm.addEventListener('submit', async e=>{
       e.preventDefault();
       const fd=new FormData(editRoomForm);
@@ -307,6 +323,7 @@ showAppFrame(false);
       }
       editRoomDialog.close();
     });
+
     removeRoomForm.addEventListener('submit', async e=>{
       e.preventDefault();
       const name=new FormData(removeRoomForm).get('roomToRemove');
@@ -316,7 +333,7 @@ showAppFrame(false);
       removeRoomDialog.close();
     });
 
-    // plants
+    // ------- Plants -------
     btnAddPlant.onclick = ()=>openAdd();
     btnEditPlant.onclick = ()=>editPlantChooser.showModal();
     btnRemovePlant.onclick = ()=>removePlantDialog.showModal();
@@ -400,7 +417,7 @@ showAppFrame(false);
       dialog.close();
     });
 
-    // expose signout if you need it
+    // optional sign out
     window.RG_signOut = ()=> signOut(auth).catch(()=>{});
   })();
 })();
