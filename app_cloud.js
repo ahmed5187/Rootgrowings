@@ -1,4 +1,4 @@
-// app_cloud.js — v9 (profile edit + close, centered toast)
+// app_cloud.js — v10 (fix: no await outside async, use live arrays)
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
@@ -102,7 +102,7 @@ const profileEmailInput = $('#profileEmailInput');
 const cancelProfileBtn = $('#cancelProfileBtn');
 const signOutBtn = $('#signOutBtn');
 
-/* buttons in settings */
+/* settings buttons */
 const btnAddRoom = $('#btnAddRoom');
 const btnEditRoom = $('#btnEditRoom');
 const btnRemoveRoom = $('#btnRemoveRoom');
@@ -149,7 +149,10 @@ showAppFrame(false);
       bootstrap(u);
     });
 
-    let boot = false, rooms = [], plants = [];
+    let boot = false;
+    let rooms = [];
+    let plants = [];
+
     function bootstrap(u){
       if (boot) return; boot = true;
       authOverlay.style.display = 'none';
@@ -159,7 +162,7 @@ showAppFrame(false);
       startPlantsListener();
 
       // header actions
-      if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
+      plusBtn && (plusBtn.onclick = () => activate(settingsPage));
 
       if(profileBtn && profileDialog){
         profileBtn.onclick = () => {
@@ -167,305 +170,297 @@ showAppFrame(false);
           profileEmail.textContent = u.email || '';
           profileNameInput.value = u.displayName || '';
           profileEmailInput.value = u.email || '';
-          // view mode
           profileView.style.display = '';
           profileForm.style.display = 'none';
           profileDialog.showModal();
         };
       }
-      if(profileClose){ profileClose.onclick = () => profileDialog.close(); }
-      // click backdrop to close
+      profileClose && (profileClose.onclick = () => profileDialog.close());
       profileDialog?.addEventListener('click', (e)=>{ if(e.target === profileDialog) profileDialog.close(); });
 
-      if(editProfileBtn){
-        editProfileBtn.onclick = () => {
-          profileView.style.display = 'none';
-          profileForm.style.display = 'block';
-          profileNameInput.focus();
-        };
-      }
-      if(cancelProfileBtn){
-        cancelProfileBtn.onclick = () => {
-          profileForm.style.display = 'none';
-          profileView.style.display = '';
-        };
-      }
-      if(profileForm){
-        profileForm.addEventListener('submit', async (e)=>{
-          e.preventDefault();
-          const newName = (profileNameInput.value || '').trim();
-          if(!newName){ alert('Please enter a name'); return; }
-          await updateProfile(auth.currentUser, { displayName: newName }).catch(()=>{});
-          profileName.textContent = newName;
-          profileView.style.display = '';
-          profileForm.style.display = 'none';
-          showToastCenter('Profile updated');
+      editProfileBtn && (editProfileBtn.onclick = () => {
+        profileView.style.display = 'none';
+        profileForm.style.display = 'block';
+        profileNameInput.focus();
+      });
+      cancelProfileBtn && (cancelProfileBtn.onclick = () => {
+        profileForm.style.display = 'none';
+        profileView.style.display = '';
+      });
+      profileForm && profileForm.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const newName = (profileNameInput.value || '').trim();
+        if(!newName){ alert('Please enter a name'); return; }
+        await updateProfile(auth.currentUser, { displayName: newName }).catch(()=>{});
+        profileName.textContent = newName;
+        profileView.style.display = '';
+        profileForm.style.display = 'none';
+        showToastCenter('Profile updated');
+      });
+      signOutBtn && (signOutBtn.onclick = async () => { await signOut(auth).catch(()=>{}); profileDialog.close(); });
+
+      /* listeners */
+      function startRoomsListener(){
+        const qref = collection(db, 'users', auth.currentUser.uid, 'rooms');
+        onSnapshot(qref, snap => {
+          rooms = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+          if(rooms.length === 0){
+            [{name:'Bedroom', icon:'🛏️'},{name:'Living room', icon:'🛋️'},{name:'Kitchen', icon:'🍽️'}]
+              .forEach(r => addDoc(collection(db, 'users', auth.currentUser.uid, 'rooms'), r));
+          }
+          renderRoomOptions(); renderHome(); renderPickers();
         });
       }
-      if(signOutBtn){ signOutBtn.onclick = async () => { await signOut(auth).catch(()=>{}); profileDialog.close(); }; }
-    }
 
-    /* NAV */
-    function activate(page){
-      for(const el of document.querySelectorAll('.page')) el.classList.remove('active');
-      page.classList.add('active');
-      for(const b of [navHome, navSettings, navChat]) b && b.classList.remove('active');
-      if(page === homePage){ navHome && navHome.classList.add('active'); plusBtn.style.display='block'; homeTitle.style.display='block'; settingsTitle.style.display='none'; }
-      if(page === settingsPage){ navSettings && navSettings.classList.add('active'); plusBtn.style.display='none'; homeTitle.style.display='none'; settingsTitle.style.display='block'; }
-      if(page === chatPage){ navChat && navChat.classList.add('active'); plusBtn.style.display='none'; homeTitle.style.display='none'; settingsTitle.style.display='none'; }
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
-    navHome && (navHome.onclick = () => activate(homePage));
-    navSettings && (navSettings.onclick = () => activate(settingsPage));
-    navChat && (navChat.onclick = () => activate(chatPage));
+      function startPlantsListener(){
+        const qref = collection(db, 'users', auth.currentUser.uid, 'plants');
+        onSnapshot(qref, snap => {
+          plants = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+          renderHome(); renderPickers();
+        });
+      }
 
-    /* LISTENERS */
-    function startRoomsListener(){
-      const qref = collection(db, 'users', getAuth().currentUser.uid, 'rooms');
-      onSnapshot(qref, snap => {
-        rooms = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-        if(rooms.length === 0){
-          [{name:'Bedroom', icon:'🛏️'},{name:'Living room', icon:'🛋️'},{name:'Kitchen', icon:'🍽️'}]
-            .forEach(r => addDoc(collection(db, 'users', getAuth().currentUser.uid, 'rooms'), r));
+      /* schedule helpers */
+      const baseIntervalDays = (t)=>({ 'Monstera deliciosa':7,'Epipremnum aureum':7,'Spathiphyllum':6,'Sansevieria':14,'Ficus elastica':10 }[t]||8);
+      const lightFactor = v => v==='bright'?0.8 : v==='low'?1.2 : 1.0;
+      const seasonFactor = d => { const m=d.getMonth()+1; if(m>=6&&m<=8) return 0.9; if(m===12||m<=2) return 1.1; return 1.0; };
+      const potFactor = cm => !cm?1.0 : cm<12?0.9 : cm>18?1.1 : 1.0;
+      function calcIntervalDays(p){ if(p.scheduleMode==='custom') return Number(p.customIntervalDays||10); const base=p.suggestedIntervalDays||baseIntervalDays(p.plantType); const f=lightFactor(p.lightLevel)*seasonFactor(new Date())*potFactor(Number(p.potSize)); return Math.max(2,Math.round(base*f)); }
+      function setNextDue(p){ const last=p.lastWateredUtc?new Date(p.lastWateredUtc):new Date(); const n=new Date(last); n.setUTCDate(n.getUTCDate()+calcIntervalDays(p)); p.suggestedIntervalDays=calcIntervalDays(p); p.nextDueUtc=n.toISOString(); }
+      const daysBetween = (a,b)=>Math.max(0,Math.ceil((b-a)/86400000));
+      const roomIcon = name => (rooms.find(x=>x.name===name)?.icon || '🏷️');
+      const allRoomNames = ()=> rooms.map(r=>r.name);
+      const groupByRoom = list => { const map={}; for(const r of rooms) map[r.name]=[]; for(const p of list){ const rn=p.location||'Unassigned'; if(!map[rn]) map[rn]=[]; map[rn].push(p);} return map; };
+
+      /* rendering */
+      function renderRoomOptions(){
+        roomSelect.innerHTML = allRoomNames().map(r=>`<option value="${r}">${r}</option>`).join('');
+      }
+      function renderPickers(){
+        $('#roomEditSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+        $('#roomRemoveSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+        plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+        plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      }
+      function renderHome(){
+        const sorted=[...plants].sort((a,b)=>new Date(a.nextDueUtc)-new Date(b.nextDueUtc));
+        const groups=groupByRoom(sorted);
+        homeContent.innerHTML='';
+        const any = plants.length>0; homeEmpty.hidden = any; if(!any) return;
+
+        for(const room of Object.keys(groups)){
+          if(groups[room].length===0) continue;
+          const sec=document.createElement('div'); sec.className='section';
+          sec.innerHTML=`<h3><span class="roomIcon">${roomIcon(room)}</span> ${room}</h3>`;
+          const wrap=document.createElement('div'); wrap.className='group';
+          const row=document.createElement('div'); row.className='row';
+
+          for(const p of groups[room]){
+            const total=daysBetween(new Date(p.lastWateredUtc), new Date(p.nextDueUtc))||1;
+            const left =daysBetween(new Date(), new Date(p.nextDueUtc));
+            const pct  =Math.max(0,Math.min(100,Math.round(((total-left)/total)*100)));
+
+            const card=document.createElement('div'); card.className='card';
+            const gear=document.createElement('button'); gear.className='gear';
+            gear.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.5-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.2l-.4 2.6c-.6.2-1.2.5-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.2 1.2-.5 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.6.1-1Z" fill="currentColor"/></svg>`;
+            gear.onclick=()=>openEdit(p.id);
+
+            const photoWrap=document.createElement('div'); photoWrap.className='photoWrap';
+            const img=document.createElement('div'); img.className='photo';
+            img.style.backgroundImage = `url('${p.photoUrl || DEFAULT_IMG}')`;
+            const ring=document.createElement('div'); ring.className='ring';
+            ring.style.setProperty('--pct', pct+'%'); ring.innerHTML = `<span>${left}d</span>`;
+            photoWrap.append(img, ring);
+
+            const title=document.createElement('div');
+            title.innerHTML=`<div class="name">${p.name}</div><div class="nick">${p.nickname||''}</div>`;
+
+            const meta=document.createElement('div'); meta.className='meta';
+            meta.textContent = `Next due ${new Date(p.nextDueUtc).toLocaleDateString()}`;
+
+            const actions=document.createElement('div'); actions.className='actions';
+            const water=document.createElement('button'); water.className='btn primary'; water.textContent='Water';
+            water.onclick=async()=>{ const ref=doc(db,'users',auth.currentUser.uid,'plants',p.id); const now=new Date().toISOString(); await updateDoc(ref,{lastWateredUtc:now,updatedAt:now}); };
+            const snooze=document.createElement('button'); snooze.className='btn ghost'; snooze.textContent='Snooze';
+            snooze.onclick=async()=>{ const d=new Date(p.nextDueUtc); d.setUTCDate(d.getUTCDate()+1); await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); };
+            actions.append(water,snooze);
+
+            card.append(gear,photoWrap,title,meta,actions);
+            row.append(card);
+          }
+          wrap.append(row); sec.append(wrap); homeContent.append(sec);
         }
-        renderRoomOptions(); renderHome(); renderPickers();
+      }
+
+      /* icon picker */
+      function populateIconGrid(container){
+        const icons=['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
+        container.innerHTML=''; icons.forEach(ic=>{ const d=document.createElement('div'); d.className='iconPick'; d.textContent=ic;
+          d.onclick=()=>{ for(const el of container.querySelectorAll('.iconPick')) el.classList.remove('selected'); d.classList.add('selected'); container.dataset.icon=ic; }; container.append(d);
+        });
+      }
+
+      /* Rooms */
+      btnAddRoom.onclick = ()=>{ populateIconGrid($('#iconGrid')); addRoomForm.reset(); addRoomDialog.showModal(); };
+      btnEditRoom.onclick = ()=>{ populateIconGrid($('#iconGridEdit')); editRoomDialog.showModal(); };
+      btnRemoveRoom.onclick = ()=> removeRoomDialog.showModal();
+      addRoomCancel.onclick = ()=> addRoomDialog.close();
+      editRoomCancel.onclick = ()=> editRoomDialog.close();
+      $('#removeRoomCancel').onclick = ()=> removeRoomDialog.close();
+
+      addRoomForm.addEventListener('submit', async e=>{
+        e.preventDefault();
+        const fd=new FormData(addRoomForm);
+        const name=(fd.get('roomName')||'').toString().trim();
+        const icon=$('#iconGrid').querySelector('.iconPick.selected')?.textContent || '🏷️';
+        if(!name) return;
+        await addDoc(collection(db,'users',auth.currentUser.uid,'rooms'),{ name, icon });
+        addRoomDialog.close();
+        showToastCenter('Room added');
       });
-    }
-    function startPlantsListener(){
-      const qref = collection(db, 'users', getAuth().currentUser.uid, 'plants');
-      onSnapshot(qref, snap => {
-        plants = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-        renderHome(); renderPickers();
-      });
-    }
 
-    /* helpers */
-    const baseIntervalDays = (t)=>({ 'Monstera deliciosa':7,'Epipremnum aureum':7,'Spathiphyllum':6,'Sansevieria':14,'Ficus elastica':10 }[t]||8);
-    const lightFactor = v => v==='bright'?0.8 : v==='low'?1.2 : 1.0;
-    const seasonFactor = d => { const m=d.getMonth()+1; if(m>=6&&m<=8) return 0.9; if(m===12||m<=2) return 1.1; return 1.0; };
-    const potFactor = cm => !cm?1.0 : cm<12?0.9 : cm>18?1.1 : 1.0;
-    function calcIntervalDays(p){ if(p.scheduleMode==='custom') return Number(p.customIntervalDays||10); const base=p.suggestedIntervalDays||baseIntervalDays(p.plantType); const f=lightFactor(p.lightLevel)*seasonFactor(new Date())*potFactor(Number(p.potSize)); return Math.max(2,Math.round(base*f)); }
-    function setNextDue(p){ const last=p.lastWateredUtc?new Date(p.lastWateredUtc):new Date(); const n=new Date(last); n.setUTCDate(n.getUTCDate()+calcIntervalDays(p)); p.suggestedIntervalDays=calcIntervalDays(p); p.nextDueUtc=n.toISOString(); }
-    const daysBetween = (a,b)=>Math.max(0,Math.ceil((b-a)/86400000));
-    const roomIcon = name => (rooms.find(x=>x.name===name)?.icon || '🏷️');
-    const allRoomNames = ()=> rooms.map(r=>r.name);
-    const groupByRoom = list => { const map={}; for(const r of rooms) map[r.name]=[]; for(const p of list){ const rn=p.location||'Unassigned'; if(!map[rn]) map[rn]=[]; map[rn].push(p);} return map; };
-
-    /* rendering */
-    function renderRoomOptions(){
-      roomSelect.innerHTML = allRoomNames().map(r=>`<option value="${r}">${r}</option>`).join('');
-    }
-    function renderPickers(){
-      $('#roomEditSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      $('#roomRemoveSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
-      plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
-    }
-    function renderHome(){
-      const sorted=[...plants].sort((a,b)=>new Date(a.nextDueUtc)-new Date(b.nextDueUtc));
-      const groups=groupByRoom(sorted);
-      homeContent.innerHTML='';
-      const any = plants.length>0; homeEmpty.hidden = any; if(!any) return;
-
-      for(const room of Object.keys(groups)){
-        if(groups[room].length===0) continue;
-        const sec=document.createElement('div'); sec.className='section';
-        sec.innerHTML=`<h3><span class="roomIcon">${roomIcon(room)}</span> ${room}</h3>`;
-        const wrap=document.createElement('div'); wrap.className='group';
-        const row=document.createElement('div'); row.className='row';
-
-        for(const p of groups[room]){
-          const total=daysBetween(new Date(p.lastWateredUtc), new Date(p.nextDueUtc))||1;
-          const left =daysBetween(new Date(), new Date(p.nextDueUtc));
-          const pct  =Math.max(0,Math.min(100,Math.round(((total-left)/total)*100)));
-
-          const card=document.createElement('div'); card.className='card';
-          const gear=document.createElement('button'); gear.className='gear';
-          gear.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.5-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.2l-.4 2.6c-.6.2-1.2.5-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.2 1.2-.5 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.6.1-1Z" fill="currentColor"/></svg>`;
-          gear.onclick=()=>openEdit(p.id);
-
-          const photoWrap=document.createElement('div'); photoWrap.className='photoWrap';
-          const img=document.createElement('div'); img.className='photo';
-          img.style.backgroundImage = `url('${p.photoUrl || DEFAULT_IMG}')`;
-          const ring=document.createElement('div'); ring.className='ring';
-          ring.style.setProperty('--pct', pct+'%'); ring.innerHTML = `<span>${left}d</span>`;
-          photoWrap.append(img, ring);
-
-          const title=document.createElement('div');
-          title.innerHTML=`<div class="name">${p.name}</div><div class="nick">${p.nickname||''}</div>`;
-
-          const meta=document.createElement('div'); meta.className='meta';
-          meta.textContent = `Next due ${new Date(p.nextDueUtc).toLocaleDateString()}`;
-
-          const actions=document.createElement('div'); actions.className='actions';
-          const water=document.createElement('button'); water.className='btn primary'; water.textContent='Water';
-          water.onclick=async()=>{ const ref=doc(db,'users',getAuth().currentUser.uid,'plants',p.id); const now=new Date().toISOString(); await updateDoc(ref,{lastWateredUtc:now,updatedAt:now}); };
-          const snooze=document.createElement('button'); snooze.className='btn ghost'; snooze.textContent='Snooze';
-          snooze.onclick=async()=>{ const d=new Date(p.nextDueUtc); d.setUTCDate(d.getUTCDate()+1); await updateDoc(doc(db,'users',getAuth().currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); };
-          actions.append(water,snooze);
-
-          card.append(gear,photoWrap,title,meta,actions);
-          row.append(card);
+      editRoomForm.addEventListener('submit', async e=>{
+        e.preventDefault();
+        const fd=new FormData(editRoomForm);
+        const oldName=fd.get('roomToEdit');
+        const newName=(fd.get('newRoomName')||'').toString().trim();
+        const newIcon=$('#iconGridEdit').querySelector('.iconPick.selected')?.textContent;
+        const roomDoc=rooms.find(r=>r.name===oldName); if(!roomDoc) return;
+        const patch={}; if(newName) patch.name=newName; if(newIcon) patch.icon=newIcon;
+        if(Object.keys(patch).length) await updateDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id),patch);
+        if(newName && newName!==oldName){
+          for(const p of plants.filter(p=>p.location===oldName)){
+            await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:newName });
+          }
         }
-        wrap.append(row); sec.append(wrap); homeContent.append(sec);
-      }
-    }
-
-    /* icon picker */
-    function populateIconGrid(container){
-      const icons=['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
-      container.innerHTML=''; icons.forEach(ic=>{ const d=document.createElement('div'); d.className='iconPick'; d.textContent=ic;
-        d.onclick=()=>{ for(const el of container.querySelectorAll('.iconPick')) el.classList.remove('selected'); d.classList.add('selected'); container.dataset.icon=ic; }; container.append(d);
+        editRoomDialog.close();
+        showToastCenter('Room updated');
       });
-    }
 
-    /* Rooms */
-    btnAddRoom.onclick = ()=>{ populateIconGrid($('#iconGrid')); addRoomForm.reset(); addRoomDialog.showModal(); };
-    btnEditRoom.onclick = ()=>{ populateIconGrid($('#iconGridEdit')); editRoomDialog.showModal(); };
-    btnRemoveRoom.onclick = ()=> removeRoomDialog.showModal();
-    addRoomCancel.onclick = ()=> addRoomDialog.close();
-    editRoomCancel.onclick = ()=> editRoomDialog.close();
-    $('#removeRoomCancel').onclick = ()=> removeRoomDialog.close();
+      removeRoomForm.addEventListener('submit', async e=>{
+        e.preventDefault();
+        const name=new FormData(removeRoomForm).get('roomToRemove');
+        const roomDoc=rooms.find(r=>r.name===name); if(!roomDoc) return;
+        await deleteDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id));
+        for(const p of plants.filter(p=>p.location===name)){
+          await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:'Unassigned' });
+        }
+        removeRoomDialog.close();
+        showToastCenter('Room removed');
+      });
 
-    addRoomForm.addEventListener('submit', async e=>{
-      e.preventDefault();
-      const fd=new FormData(addRoomForm);
-      const name=(fd.get('roomName')||'').toString().trim();
-      const icon=$('#iconGrid').querySelector('.iconPick.selected')?.textContent || '🏷️';
-      if(!name) return;
-      await addDoc(collection(db,'users',getAuth().currentUser.uid,'rooms'),{ name, icon });
-      addRoomDialog.close();
-      showToastCenter('Room added');
-    });
+      /* Plants */
+      btnAddPlant.onclick = ()=>openAdd();
+      btnEditPlant.onclick = ()=>editPlantChooser.showModal();
+      btnRemovePlant.onclick = ()=>removePlantDialog.showModal();
+      editPlantCancel.onclick = ()=>editPlantChooser.close();
+      $('#removePlantCancel').onclick = ()=>removePlantDialog.close();
 
-    editRoomForm.addEventListener('submit', async e=>{
-      e.preventDefault();
-      const fd=new FormData(editRoomForm);
-      const oldName=fd.get('roomToEdit');
-      const newName=(fd.get('newRoomName')||'').toString().trim();
-      const newIcon=$('#iconGridEdit').querySelector('.iconPick.selected')?.textContent;
-      const roomsSnap = await new Promise(res => onSnapshot(collection(db,'users',getAuth().currentUser.uid,'rooms'), s=>res(s), {once:true}));
-      const roomsArr = roomsSnap.docs.map(d=>({id:d.id,...d.data()}));
-      const roomDoc=roomsArr.find(r=>r.name===oldName); if(!roomDoc) return;
-      const patch={}; if(newName) patch.name=newName; if(newIcon) patch.icon=newIcon;
-      if(Object.keys(patch).length) await updateDoc(doc(db,'users',getAuth().currentUser.uid,'rooms',roomDoc.id),patch);
-      editRoomDialog.close();
-      showToastCenter('Room updated');
-    });
-
-    removeRoomForm.addEventListener('submit', async e=>{
-      e.preventDefault();
-      const name=new FormData(removeRoomForm).get('roomToRemove');
-      const roomsSnap = await new Promise(res => onSnapshot(collection(db,'users',getAuth().currentUser.uid,'rooms'), s=>res(s), {once:true}));
-      const roomsArr = roomsSnap.docs.map(d=>({id:d.id,...d.data()}));
-      const roomDoc=roomsArr.find(r=>r.name===name); if(!roomDoc) return;
-      await deleteDoc(doc(db,'users',getAuth().currentUser.uid,'rooms',roomDoc.id));
-      removeRoomDialog.close();
-      showToastCenter('Room removed');
-    });
-
-    /* Plants */
-    btnAddPlant.onclick = ()=>openAdd();
-    btnEditPlant.onclick = ()=>editPlantChooser.showModal();
-    btnRemovePlant.onclick = ()=>removePlantDialog.showModal();
-    editPlantCancel.onclick = ()=>editPlantChooser.close();
-    $('#removePlantCancel').onclick = ()=>removePlantDialog.close();
-
-    function openAdd(){
-      plantDialogTitle.textContent='Add plant';
-      deletePlantBtn.style.display='none';
-      form.reset(); renderRoomOptions(); delete form.dataset.editing; dialog.showModal();
-    }
-    function openEdit(id){
-      const snap = await new Promise(res => onSnapshot(collection(db,'users',getAuth().currentUser.uid,'plants'), s=>res(s), {once:true}));
-      const arr = snap.docs.map(d=>({id:d.id,...d.data()}));
-      const p=arr.find(x=>x.id===id); if(!p) return;
-      plantDialogTitle.textContent='Edit plant';
-      deletePlantBtn.style.display='inline-block';
-      form.reset(); renderRoomOptions();
-      form.querySelector('[name="name"]').value=p.name;
-      form.querySelector('[name="nickname"]').value=p.nickname;
-      form.querySelector('[name="plantType"]').value=p.plantType;
-      form.querySelector('[name="location"]').value=p.location;
-      form.querySelector('[name="potSize"]').value=p.potSize;
-      form.querySelector('[name="lightLevel"]').value=p.lightLevel;
-      form.querySelector('[name="scheduleMode"]').value=p.scheduleMode;
-      form.querySelector('[name="customIntervalDays"]').value=p.customIntervalDays;
-      form.dataset.editing=id;
-      dialog.showModal();
-    }
-    deletePlantBtn.onclick = async ()=>{ 
-      const id=form.dataset.editing; if(!id) return; 
-      await deleteDoc(doc(db,'users',getAuth().currentUser.uid,'plants',id)); 
-      dialog.close(); 
-      showToastCenter('Plant deleted');
-    };
-    editPlantChooserForm.addEventListener('submit', e=>{ 
-      e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); 
-      if(id){ editPlantChooser.close(); openEdit(id);} 
-    });
-    removePlantForm.addEventListener('submit', async e=>{ 
-      e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); 
-      if(!id) return; await deleteDoc(doc(db,'users',getAuth().currentUser.uid,'plants',id)); 
-      removePlantDialog.close(); 
-      showToastCenter('Plant removed'); 
-    });
-    cancelBtn.onclick = ()=>{ form.reset(); delete form.dataset.editing; dialog.close(); };
-
-    form.addEventListener('submit', async e=>{
-      e.preventDefault();
-      const fd=new FormData(form);
-      const editing=form.dataset.editing||'';
-      const file=fd.get('photo');
-      let photoUrl='';
-
-      if(file && file.size && file.size>2*1024*1024){ alert('Image too large, max 2MB'); return; }
-      if(file && file.size){
-        const path=`plants/${getAuth().currentUser.uid}/${editing || crypto.randomUUID()}.jpg`;
-        const ref=sRef(storage, path);
-        const bytes=await file.arrayBuffer();
-        await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
-        photoUrl=await getDownloadURL(ref);
+      function openAdd(){
+        plantDialogTitle.textContent='Add plant';
+        deletePlantBtn.style.display='none';
+        form.reset(); renderRoomOptions(); delete form.dataset.editing; dialog.showModal();
       }
-
-      if(editing){
-        const patch={
-          name: fd.get('name'),
-          nickname: fd.get('nickname')||'',
-          plantType: fd.get('plantType')||'',
-          location: fd.get('location')||'Unassigned',
-          potSize: Number(fd.get('potSize')||15),
-          lightLevel: fd.get('lightLevel')||'medium',
-          scheduleMode: fd.get('scheduleMode')||'suggested',
-          customIntervalDays: Number(fd.get('customIntervalDays')||10),
-          updatedAt: new Date().toISOString()
-        };
-        if(photoUrl) patch.photoUrl=photoUrl;
-        await updateDoc(doc(db,'users',getAuth().currentUser.uid,'plants',editing), patch);
-        showToastCenter('Plant updated');
-      } else {
-        const p={
-          name: fd.get('name'),
-          nickname: fd.get('nickname')||'',
-          photoUrl: photoUrl || DEFAULT_IMG,
-          plantType: fd.get('plantType')||'',
-          location: fd.get('location')||'Unassigned',
-          potSize: Number(fd.get('potSize')||15),
-          lightLevel: fd.get('lightLevel')||'medium',
-          scheduleMode: fd.get('scheduleMode')||'suggested',
-          customIntervalDays: Number(fd.get('customIntervalDays')||10),
-          lastWateredUtc: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        setNextDue(p);
-        await addDoc(collection(db,'users',getAuth().currentUser.uid,'plants'), p);
-        showToastCenter('Plant added');
+      function openEdit(id){
+        const p=plants.find(x=>x.id===id); if(!p) return;
+        plantDialogTitle.textContent='Edit plant';
+        deletePlantBtn.style.display='inline-block';
+        form.reset(); renderRoomOptions();
+        form.querySelector('[name="name"]').value=p.name;
+        form.querySelector('[name="nickname"]').value=p.nickname;
+        form.querySelector('[name="plantType"]').value=p.plantType;
+        form.querySelector('[name="location"]').value=p.location;
+        form.querySelector('[name="potSize"]').value=p.potSize;
+        form.querySelector('[name="lightLevel"]').value=p.lightLevel;
+        form.querySelector('[name="scheduleMode"]').value=p.scheduleMode;
+        form.querySelector('[name="customIntervalDays"]').value=p.customIntervalDays;
+        form.dataset.editing=id;
+        dialog.showModal();
       }
-      dialog.close();
-    });
+      deletePlantBtn.onclick = async ()=>{ 
+        const id=form.dataset.editing; if(!id) return; 
+        await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
+        dialog.close(); 
+        showToastCenter('Plant deleted');
+      };
+      editPlantChooserForm.addEventListener('submit', e=>{ 
+        e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); 
+        if(id){ editPlantChooser.close(); openEdit(id);} 
+      });
+      removePlantForm.addEventListener('submit', async e=>{ 
+        e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); 
+        if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
+        removePlantDialog.close(); 
+        showToastCenter('Plant removed'); 
+      });
+      cancelBtn.onclick = ()=>{ form.reset(); delete form.dataset.editing; dialog.close(); };
 
-    // expose for debugging
-    window.RG_signOut = ()=> signOut(auth).catch(()=>{});
+      form.addEventListener('submit', async e=>{
+        e.preventDefault();
+        const fd=new FormData(form);
+        const editing=form.dataset.editing||'';
+        const file=fd.get('photo');
+        let photoUrl='';
+
+        if(file && file.size && file.size>2*1024*1024){ alert('Image too large, max 2MB'); return; }
+        if(file && file.size){
+          const path=`plants/${auth.currentUser.uid}/${editing || crypto.randomUUID()}.jpg`;
+          const ref=sRef(storage, path);
+          const bytes=await file.arrayBuffer();
+          await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
+          photoUrl=await getDownloadURL(ref);
+        }
+
+        if(editing){
+          const patch={
+            name: fd.get('name'),
+            nickname: fd.get('nickname')||'',
+            plantType: fd.get('plantType')||'',
+            location: fd.get('location')||'Unassigned',
+            potSize: Number(fd.get('potSize')||15),
+            lightLevel: fd.get('lightLevel')||'medium',
+            scheduleMode: fd.get('scheduleMode')||'suggested',
+            customIntervalDays: Number(fd.get('customIntervalDays')||10),
+            updatedAt: new Date().toISOString()
+          };
+          if(photoUrl) patch.photoUrl=photoUrl;
+          await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',editing), patch);
+          showToastCenter('Plant updated');
+        } else {
+          const p={
+            name: fd.get('name'),
+            nickname: fd.get('nickname')||'',
+            photoUrl: photoUrl || DEFAULT_IMG,
+            plantType: fd.get('plantType')||'',
+            location: fd.get('location')||'Unassigned',
+            potSize: Number(fd.get('potSize')||15),
+            lightLevel: fd.get('lightLevel')||'medium',
+            scheduleMode: fd.get('scheduleMode')||'suggested',
+            customIntervalDays: Number(fd.get('customIntervalDays')||10),
+            lastWateredUtc: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          setNextDue(p);
+          await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), p);
+          showToastCenter('Plant added');
+        }
+        dialog.close();
+      });
+
+      /* NAV (keep last so it's definitely bound) */
+      function activate(page){
+        for(const el of document.querySelectorAll('.page')) el.classList.remove('active');
+        page.classList.add('active');
+        for(const b of [navHome, navSettings, navChat]) b && b.classList.remove('active');
+        if(page === homePage){ navHome && navHome.classList.add('active'); plusBtn.style.display='block'; homeTitle.style.display='block'; settingsTitle.style.display='none'; }
+        if(page === settingsPage){ navSettings && navSettings.classList.add('active'); plusBtn.style.display='none'; homeTitle.style.display='none'; settingsTitle.style.display='block'; }
+        if(page === chatPage){ navChat && navChat.classList.add('active'); plusBtn.style.display='none'; homeTitle.style.display='none'; settingsTitle.style.display='none'; }
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+      navHome && (navHome.onclick = () => activate(homePage));
+      navSettings && (navSettings.onclick = () => activate(settingsPage));
+      navChat && (navChat.onclick = () => activate(chatPage));
+    }
   })();
 })();
