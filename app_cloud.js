@@ -1,10 +1,7 @@
-// app_cloud.js v12
-// - Due date + time (preferredWaterTime) and fertilizer intervals
-// - Local notification prompt + in-app minute scheduler (foreground)
-// - Profile photo upload (no URL field)
-// - Insights tab with simple SVG charts
-// - Logs subcollection for water/fertilize events
-// - Rooms unique case-insensitive, names uppercased in UI
+// app_cloud.js v13
+// - Null-safety guards to avoid "reading 'style'" crash
+// - Insights extended: fertilizer charts + per-room charts
+// - (Keeps: due-time, fertilizer fields, local notifs, profile upload, logs)
 
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -15,7 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, addDoc, onSnapshot,
-  updateDoc, deleteDoc, getDocs, query, where, orderBy
+  updateDoc, deleteDoc, getDocs
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL
@@ -130,18 +127,17 @@ const detailsCloseBtn = $('#detailsCloseBtn');
 const detailsFertBtn = $('#detailsFertBtn');
 
 /* insights charts */
-const chart14 = $('#chart14');
-const chartPlants = $('#chartPlants');
+const chart14Water = $('#chart14Water');
+const chart14Fert = $('#chart14Fert');
+const chartByPlant = $('#chartByPlant');
+const chartByRoomWater = $('#chartByRoomWater');
+const chartByRoomFert = $('#chartByRoomFert');
 
-function showToast(msg='Saved'){ toastMsg.textContent=msg; toastDialog.showModal(); }
-toastOk.onclick = ()=> toastDialog.close();
+function showToast(msg='Saved'){ if (toastMsg && toastDialog){ toastMsg.textContent=msg; toastDialog.showModal(); } }
+toastOk?.addEventListener('click', ()=> toastDialog.close());
 
-/* notifications prompt */
-notifyAllow.onclick = async ()=>{
-  try { await Notification.requestPermission(); } catch {}
-  notifyDialog.close();
-};
-notifyLater.onclick = ()=> notifyDialog.close();
+notifyAllow?.addEventListener('click', async ()=>{ try{ await Notification.requestPermission(); }catch{} notifyDialog.close(); });
+notifyLater?.addEventListener('click', ()=> notifyDialog.close());
 
 /* ---------- App init ---------- */
 (function init(){
@@ -167,7 +163,15 @@ notifyLater.onclick = ()=> notifyDialog.close();
     });
 
     try { const rr = await getRedirectResult(auth); if (rr?.user) boot(rr.user); } catch {}
-    onAuthStateChanged(auth, (u) => { if (!u) { for (const p of Object.values(pages)) p.style.display='none'; authOverlay.style.display='flex'; return; } boot(u); });
+
+    onAuthStateChanged(auth, (u) => {
+      if (!u) {
+        Object.values(pages).forEach(p => p && (p.style.display='none')); // null-safe
+        authOverlay.style.display='flex';
+        return;
+      }
+      boot(u);
+    });
 
     let booted=false, rooms=[], plants=[];
     let schedulerTimer=null, currentDetailsId=null;
@@ -175,57 +179,54 @@ notifyLater.onclick = ()=> notifyDialog.close();
     function boot(u){
       if (booted) return; booted=true;
       authOverlay.style.display='none';
-      for (const p of Object.values(pages)) p.style.display='';
+      Object.values(pages).forEach(p => p && (p.style.display='')); // null-safe
       activate('home');
 
       startRooms();
       startPlants();
-      startScheduler(); // local minute checks
+      startScheduler();
 
-      if (Notification && Notification.permission === 'default') {
-        setTimeout(()=> notifyDialog.showModal(), 600); // polite prompt
+      if ('Notification' in window && Notification.permission === 'default'){
+        setTimeout(()=> notifyDialog?.showModal(), 600);
       }
 
-      plusBtn.onclick = () => activate('settings');
-      profileBtn.onclick = openProfile;
+      plusBtn?.addEventListener('click', ()=> activate('settings'));
+      profileBtn?.addEventListener('click', openProfile);
 
-      nav.home.onclick = () => activate('home');
-      nav.settings.onclick = () => activate('settings');
-      nav.insights.onclick = () => { activate('insights'); renderInsights(); };
-      nav.chat.onclick = () => activate('chat');
+      nav.home?.addEventListener('click', ()=> activate('home'));
+      nav.settings?.addEventListener('click', ()=> activate('settings'));
+      nav.insights?.addEventListener('click', ()=>{ activate('insights'); renderInsights(); });
+      nav.chat?.addEventListener('click', ()=> activate('chat'));
     }
 
     function activate(key){
-      for (const k of Object.keys(pages)) pages[k].classList.remove('active');
-      pages[key].classList.add('active');
-
-      for (const k of Object.keys(nav)) nav[k]?.classList.remove('active');
+      if (!pages[key]) return;
+      Object.keys(pages).forEach(k=> pages[k]?.classList.remove('active'));
+      pages[key]?.classList.add('active');
+      Object.keys(nav).forEach(k=> nav[k]?.classList.remove('active'));
       nav[key]?.classList.add('active');
-
-      for (const k of Object.keys(titles)) titles[k].style.display = (k===key ? 'block' : 'none');
+      Object.keys(titles).forEach(k=> titles[k] && (titles[k].style.display = (k===key ? 'block' : 'none')));
       window.scrollTo({ top:0, behavior:'instant' });
     }
 
     /* -------- Profile -------- */
     async function openProfile(){
-      const u = auth.currentUser;
-      if (!u) return;
-      profileName.textContent = u.displayName || 'Plant lover';
-      profileEmail.textContent = u.email || '';
-      profileAvatar.src = u.photoURL || 'assets/RGicon.jpg';
-      displayNameInput.value = u.displayName || '';
-      photoFileInput.value = '';
-      profileDialog.showModal();
+      const u = auth.currentUser; if(!u) return;
+      if (profileName) profileName.textContent = u.displayName || 'Plant lover';
+      if (profileEmail) profileEmail.textContent = u.email || '';
+      if (profileAvatar) profileAvatar.src = u.photoURL || 'assets/RGicon.jpg';
+      if (displayNameInput) displayNameInput.value = u.displayName || '';
+      if (photoFileInput) photoFileInput.value = '';
+      profileDialog?.showModal();
     }
-    closeProfile.onclick = () => profileDialog.close();
-    signOutBtn.onclick = () => signOut(auth).catch(()=>{}).finally(()=>profileDialog.close());
-    profileForm.addEventListener('submit', async (e)=>{
+    closeProfile?.addEventListener('click', ()=> profileDialog.close());
+    signOutBtn?.addEventListener('click', ()=> signOut(auth).catch(()=>{}).finally(()=>profileDialog.close()));
+    profileForm?.addEventListener('submit', async (e)=>{
       e.preventDefault();
       const u=auth.currentUser; if(!u) return;
 
-      // upload photo if any
       let newPhotoURL = null;
-      const file = photoFileInput.files?.[0];
+      const file = photoFileInput?.files?.[0];
       if (file && file.size){
         if (file.size > 2*1024*1024){ alert('Image too large, max 2MB'); return; }
         const ref = sRef(storage, `avatars/${u.uid}.jpg`);
@@ -233,15 +234,14 @@ notifyLater.onclick = ()=> notifyDialog.close();
         await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
         newPhotoURL = await getDownloadURL(ref);
       }
-
       try{
         await updateProfile(u,{
-          displayName: displayNameInput.value.trim() || null,
+          displayName: (displayNameInput?.value || '').trim() || null,
           photoURL: newPhotoURL || u.photoURL || null
         });
         showToast('Profile updated');
       }catch{ showToast('Could not update profile'); }
-      profileDialog.close();
+      profileDialog?.close();
     });
 
     /* -------- Listeners -------- */
@@ -261,7 +261,7 @@ notifyLater.onclick = ()=> notifyDialog.close();
       onSnapshot(q, s=>{
         plants = s.docs.map(d=>({id:d.id, ...d.data()}));
         renderHome(); renderPickers();
-        if (pages.insights.classList.contains('active')) renderInsights();
+        if (pages.insights?.classList.contains('active')) renderInsights();
       });
     }
 
@@ -287,9 +287,11 @@ notifyLater.onclick = ()=> notifyDialog.close();
 
     /* -------- Render -------- */
     function renderRoomOptions(){
+      if (!roomSelect) return;
       roomSelect.innerHTML = allRoomNames().map(r=>`<option value="${r}">${r}</option>`).join('');
     }
     function renderPickers(){
+      if (!roomEditSelect || !roomRemoveSelect || !plantEditSelect || !plantRemoveSelect) return;
       roomEditSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
       roomRemoveSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
       plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
@@ -297,6 +299,7 @@ notifyLater.onclick = ()=> notifyDialog.close();
     }
 
     function renderHome(){
+      if (!homeContent || !homeEmpty) return;
       const sorted=[...plants].sort((a,b)=>new Date(a.nextDueUtc)-new Date(b.nextDueUtc));
       const groups=groupByRoom(sorted);
       homeContent.innerHTML='';
@@ -352,7 +355,7 @@ notifyLater.onclick = ()=> notifyDialog.close();
       }
     }
 
-    /* ---- Water/Fertilize actions + logs ---- */
+    /* ---- Water/Fertilize + logs ---- */
     async function addLog(plantId, type){
       await addDoc(collection(db,'users',auth.currentUser.uid,'plants',plantId,'logs'),{
         type, ts: new Date().toISOString()
@@ -377,33 +380,33 @@ notifyLater.onclick = ()=> notifyDialog.close();
       showToast('Fertilized');
     }
 
-    /* -------- Details dialog -------- */
     function openDetails(id){
       const p = plants.find(x=>x.id===id); if(!p) return;
       currentDetailsId = id;
-      detailsImage.style.backgroundImage = `url('${p.photoUrl || DEFAULT_IMG}')`;
-      detailsTitle.textContent = p.name + (p.nickname ? ` (${p.nickname})` : '');
+      detailsImage && (detailsImage.style.backgroundImage = `url('${p.photoUrl || DEFAULT_IMG}')`);
+      detailsTitle && (detailsTitle.textContent = p.name + (p.nickname ? ` (${p.nickname})` : ''));
       const meta = [
         (p.location || 'Unassigned'),
         `Water: next ${new Date(p.nextDueUtc).toLocaleString()}`,
         `Fertilize: next ${p.nextFertilizeUtc ? new Date(p.nextFertilizeUtc).toLocaleDateString() : '—'}`
       ].join(' • ');
-      detailsMeta.textContent = meta;
-      plantDetailsDialog.showModal();
+      detailsMeta && (detailsMeta.textContent = meta);
+      plantDetailsDialog?.showModal();
     }
-    detailsCloseBtn.onclick = ()=> plantDetailsDialog.close();
-    detailsEditBtn.onclick = ()=> { plantDetailsDialog.close(); if(currentDetailsId) openEdit(currentDetailsId); };
-    detailsDeleteBtn.onclick = async ()=>{
+    detailsCloseBtn?.addEventListener('click', ()=> plantDetailsDialog.close());
+    detailsEditBtn?.addEventListener('click', ()=> { plantDetailsDialog.close(); if(currentDetailsId) openEdit(currentDetailsId); });
+    detailsDeleteBtn?.addEventListener('click', async ()=>{
       if(!currentDetailsId) return;
       await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',currentDetailsId));
       plantDetailsDialog.close();
       showToast('Plant deleted');
-    };
-    detailsFertBtn.onclick = async ()=>{ if(currentDetailsId){ await markFertilized(currentDetailsId); plantDetailsDialog.close(); } };
+    });
+    detailsFertBtn?.addEventListener('click', async ()=>{ if(currentDetailsId){ await markFertilized(currentDetailsId); plantDetailsDialog.close(); } });
 
-    /* -------- Icon grid helper -------- */
+    /* -------- Icon grid -------- */
     function populateIconGrid(container){
       const icons=['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
+      if (!container) return;
       container.innerHTML='';
       icons.forEach(ic=>{
         const d=document.createElement('div'); d.className='iconPick'; d.textContent=ic;
@@ -413,34 +416,34 @@ notifyLater.onclick = ()=> notifyDialog.close();
     }
 
     /* -------- Rooms (unique names) -------- */
-    $('#btnAddRoom').onclick = ()=>{ populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
-    $('#btnEditRoom').onclick = ()=>{ populateIconGrid(iconGridEdit); editRoomDialog.showModal(); };
-    $('#btnRemoveRoom').onclick = ()=> removeRoomDialog.showModal();
-    addRoomCancel.onclick = ()=> addRoomDialog.close();
-    editRoomCancel.onclick = ()=> editRoomDialog.close();
-    $('#removeRoomCancel').onclick = ()=> removeRoomDialog.close();
+    $('#btnAddRoom')?.addEventListener('click', ()=>{ populateIconGrid(iconGrid); addRoomForm?.reset(); addRoomDialog?.showModal(); });
+    $('#btnEditRoom')?.addEventListener('click', ()=>{ populateIconGrid(iconGridEdit); editRoomDialog?.showModal(); });
+    $('#btnRemoveRoom')?.addEventListener('click', ()=> removeRoomDialog?.showModal());
+    addRoomCancel?.addEventListener('click', ()=> addRoomDialog.close());
+    editRoomCancel?.addEventListener('click', ()=> editRoomDialog.close());
+    $('#removeRoomCancel')?.addEventListener('click', ()=> removeRoomDialog.close());
 
-    addRoomForm.addEventListener('submit', async e=>{
+    addRoomForm?.addEventListener('submit', async e=>{
       e.preventDefault();
       const fd=new FormData(addRoomForm);
       const name=(fd.get('roomName')||'').toString().trim();
-      const icon=iconGrid.querySelector('.iconPick.selected')?.textContent || '🏷️';
+      const icon=iconGrid?.querySelector('.iconPick.selected')?.textContent || '🏷️';
       if(!name) return;
 
       const exists = rooms.some(r => r.name.toLowerCase() === name.toLowerCase());
       if (exists){ showToast('Room name already exists'); return; }
 
       await addDoc(collection(db,'users',auth.currentUser.uid,'rooms'),{ name, icon });
-      addRoomDialog.close();
+      addRoomDialog?.close();
       showToast('Room added');
     });
 
-    editRoomForm.addEventListener('submit', async e=>{
+    editRoomForm?.addEventListener('submit', async e=>{
       e.preventDefault();
       const fd=new FormData(editRoomForm);
       const oldName=fd.get('roomToEdit');
       const newName=(fd.get('newRoomName')||'').toString().trim();
-      const newIcon=iconGridEdit.querySelector('.iconPick.selected')?.textContent;
+      const newIcon=iconGridEdit?.querySelector('.iconPick.selected')?.textContent;
 
       const roomDoc=rooms.find(r=>r.name===oldName); if(!roomDoc) return;
 
@@ -456,11 +459,11 @@ notifyLater.onclick = ()=> notifyDialog.close();
           await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:newName });
         }
       }
-      editRoomDialog.close();
+      editRoomDialog?.close();
       showToast('Room updated');
     });
 
-    removeRoomForm.addEventListener('submit', async e=>{
+    removeRoomForm?.addEventListener('submit', async e=>{
       e.preventDefault();
       const name=new FormData(removeRoomForm).get('roomToRemove');
       const roomDoc=rooms.find(r=>r.name===name); if(!roomDoc) return;
@@ -468,27 +471,27 @@ notifyLater.onclick = ()=> notifyDialog.close();
       for(const p of plants.filter(p=>p.location===name)){
         await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:'Unassigned' });
       }
-      removeRoomDialog.close();
+      removeRoomDialog?.close();
       showToast('Room removed');
     });
 
     /* -------- Plants -------- */
-    $('#btnAddPlant').onclick = ()=>openAdd();
-    $('#btnEditPlant').onclick = ()=>editPlantChooser.showModal();
-    $('#btnRemovePlant').onclick = ()=>removePlantDialog.showModal();
-    editPlantCancel.onclick = ()=>editPlantChooser.close();
-    $('#removePlantCancel').onclick = ()=>removePlantDialog.close();
+    $('#btnAddPlant')?.addEventListener('click', ()=>openAdd());
+    $('#btnEditPlant')?.addEventListener('click', ()=>editPlantChooser?.showModal());
+    $('#btnRemovePlant')?.addEventListener('click', ()=>removePlantDialog?.showModal());
+    editPlantCancel?.addEventListener('click', ()=>editPlantChooser?.close());
+    $('#removePlantCancel')?.addEventListener('click', ()=>removePlantDialog?.close());
 
     function openAdd(){
-      plantDialogTitle.textContent='Add plant';
-      deletePlantBtn.style.display='none';
-      plantForm.reset(); renderRoomOptions(); delete plantForm.dataset.editing; plantDialog.showModal();
+      plantDialogTitle && (plantDialogTitle.textContent='Add plant');
+      deletePlantBtn && (deletePlantBtn.style.display='none');
+      plantForm?.reset(); renderRoomOptions(); delete plantForm.dataset.editing; plantDialog?.showModal();
     }
     function openEdit(id){
       const p=plants.find(x=>x.id===id); if(!p) return;
-      plantDialogTitle.textContent='Edit plant';
-      deletePlantBtn.style.display='inline-block';
-      plantForm.reset(); renderRoomOptions();
+      plantDialogTitle && (plantDialogTitle.textContent='Edit plant');
+      deletePlantBtn && (deletePlantBtn.style.display='inline-block');
+      plantForm?.reset(); renderRoomOptions();
 
       plantForm.querySelector('[name="name"]').value=p.name||'';
       plantForm.querySelector('[name="nickname"]').value=p.nickname||'';
@@ -502,14 +505,14 @@ notifyLater.onclick = ()=> notifyDialog.close();
       plantForm.querySelector('[name="fertilizerIntervalDays"]').value=p.fertilizerIntervalDays||30;
 
       plantForm.dataset.editing=id;
-      plantDialog.showModal();
+      plantDialog?.showModal();
     }
-    deletePlantBtn.onclick = async ()=>{ const id=plantForm.dataset.editing; if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); plantDialog.close(); showToast('Plant deleted'); };
-    editPlantChooserForm.addEventListener('submit', e=>{ e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); if(id){ editPlantChooser.close(); openEdit(id);} });
-    removePlantForm.addEventListener('submit', async e=>{ e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); removePlantDialog.close(); showToast('Plant removed'); });
-    cancelBtn.onclick = ()=>{ plantForm.reset(); delete plantForm.dataset.editing; plantDialog.close(); };
+    deletePlantBtn?.addEventListener('click', async ()=>{ const id=plantForm.dataset.editing; if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); plantDialog?.close(); showToast('Plant deleted'); });
+    editPlantChooserForm?.addEventListener('submit', e=>{ e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); if(id){ editPlantChooser?.close(); openEdit(id);} });
+    removePlantForm?.addEventListener('submit', async e=>{ e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); removePlantDialog?.close(); showToast('Plant removed'); });
+    cancelBtn?.addEventListener('click', ()=>{ plantForm?.reset(); delete plantForm.dataset.editing; plantDialog?.close(); });
 
-    plantForm.addEventListener('submit', async e=>{
+    plantForm?.addEventListener('submit', async e=>{
       e.preventDefault();
       const fd=new FormData(plantForm);
       const editing=plantForm.dataset.editing||'';
@@ -573,21 +576,21 @@ notifyLater.onclick = ()=> notifyDialog.close();
         await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), dummy);
         showToast('Plant added');
       }
-      plantDialog.close();
+      plantDialog?.close();
     });
 
-    /* -------- Foreground scheduler (local notifications) -------- */
+    /* -------- Foreground scheduler -------- */
     function startScheduler(){
       if (schedulerTimer) clearInterval(schedulerTimer);
-      schedulerTimer = setInterval(checkDue, 60*1000); // every minute
+      schedulerTimer = setInterval(checkDue, 60*1000);
       checkDue();
     }
-    async function checkDue(){
+    function checkDue(){
       if (!('Notification' in window) || Notification.permission!=='granted') return;
       const now = new Date();
       for (const p of plants){
         const due = p.nextDueUtc ? new Date(p.nextDueUtc) : null;
-        if (due && Math.abs(due - now) < 60*1000){ // within a minute
+        if (due && Math.abs(due - now) < 60*1000){
           new Notification(`Water ${p.name}`, { body:`It’s time to water ${p.name}`, icon:'assets/RGicon.jpg' });
         }
         const fDue = p.nextFertilizeUtc ? new Date(p.nextFertilizeUtc) : null;
@@ -596,39 +599,46 @@ notifyLater.onclick = ()=> notifyDialog.close();
         }
       }
     }
-    // NOTE: For background push, add Firebase Cloud Messaging (FCM) + service worker.
 
-    /* -------- Insights (simple SVG charts) -------- */
+    /* -------- Insights -------- */
     async function renderInsights(){
-      // Last 14 days: water logs
+      if (!chart14Water || !chart14Fert || !chartByPlant || !chartByRoomWater || !chartByRoomFert) return;
+
       const end = new Date();
-      const start = new Date(); start.setDate(end.getDate()-13); // inclusive 14 days
+      const start = new Date(); start.setDate(end.getDate()-13);
       const dayKey = d => d.toISOString().slice(0,10);
 
-      const countsByDay = {};
-      for(let i=0;i<14;i++){ const x=new Date(start); x.setDate(start.getDate()+i); countsByDay[dayKey(x)]=0; }
+      const daysW = {}, daysF = {};
+      for(let i=0;i<14;i++){ const x=new Date(start); x.setDate(start.getDate()+i); const k=dayKey(x); daysW[k]=0; daysF[k]=0; }
 
-      const countsByPlant = {}; // name -> count
+      const perPlantW = {};
+      const perRoomW = {};
+      const perRoomF = {};
 
       for (const p of plants){
-        countsByPlant[p.name]=0;
-        const logsSnap = await getDocs(query(
-          collection(db,'users',auth.currentUser.uid,'plants',p.id,'logs'),
-        ));
+        perPlantW[p.name]=0;
+        perRoomW[p.location||'Unassigned'] = perRoomW[p.location||'Unassigned']||0;
+        perRoomF[p.location||'Unassigned'] = perRoomF[p.location||'Unassigned']||0;
+
+        const logsSnap = await getDocs(collection(db,'users',auth.currentUser.uid,'plants',p.id,'logs'));
         logsSnap.forEach(docu=>{
-          const L = docu.data();
+          const L = docu.data(); const t = new Date(L.ts);
           if (L.type==='water'){
-            const t = new Date(L.ts);
-            if (t>=start && t<=end){
-              countsByDay[dayKey(t)] = (countsByDay[dayKey(t)]||0)+1;
-            }
-            countsByPlant[p.name] = (countsByPlant[p.name]||0)+1;
+            perPlantW[p.name] = (perPlantW[p.name]||0)+1;
+            perRoomW[p.location||'Unassigned'] = (perRoomW[p.location||'Unassigned']||0)+1;
+            if (t>=start && t<=end){ daysW[dayKey(t)] = (daysW[dayKey(t)]||0)+1; }
+          } else if (L.type==='fertilize'){
+            perRoomF[p.location||'Unassigned'] = (perRoomF[p.location||'Unassigned']||0)+1;
+            if (t>=start && t<=end){ daysF[dayKey(t)] = (daysF[dayKey(t)]||0)+1; }
           }
         });
       }
 
-      drawBars(chart14, Object.keys(countsByDay), Object.values(countsByDay));
-      drawBars(chartPlants, Object.keys(countsByPlant), Object.values(countsByPlant));
+      drawBars(chart14Water, Object.keys(daysW), Object.values(daysW));
+      drawBars(chart14Fert,  Object.keys(daysF), Object.values(daysF));
+      drawBars(chartByPlant, Object.keys(perPlantW), Object.values(perPlantW));
+      drawBars(chartByRoomWater, Object.keys(perRoomW), Object.values(perRoomW));
+      drawBars(chartByRoomFert,  Object.keys(perRoomF), Object.values(perRoomF));
     }
 
     function drawBars(svgEl, labels, values){
@@ -636,7 +646,6 @@ notifyLater.onclick = ()=> notifyDialog.close();
       const max=Math.max(1, ...values);
       const bw=(W-2*PAD)/Math.max(1, values.length);
       svgEl.innerHTML='';
-      // axes
       svgEl.innerHTML += `<line x1="${PAD}" y1="${H-PAD}" x2="${W-PAD}" y2="${H-PAD}" stroke="#cfe0d6"/>`;
       svgEl.innerHTML += `<line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H-PAD}" stroke="#cfe0d6"/>`;
 
@@ -647,7 +656,6 @@ notifyLater.onclick = ()=> notifyDialog.close();
         svgEl.innerHTML += `<rect x="${x}" y="${y}" width="${bw-8}" height="${h}" rx="4" fill="#2e7d4e"/>`;
       });
 
-      // small x labels (sparse to avoid clutter)
       const step = Math.ceil(values.length/7);
       labels.forEach((lab,i)=>{
         if (i%step!==0) return;
@@ -655,7 +663,6 @@ notifyLater.onclick = ()=> notifyDialog.close();
         svgEl.innerHTML += `<text x="${x}" y="${H-8}" text-anchor="middle" font-size="9" fill="#4a7c63">${lab.slice(5)}</text>`;
       });
 
-      // max label
       svgEl.innerHTML += `<text x="${PAD-6}" y="${PAD-6}" text-anchor="end" font-size="10" fill="#4a7c63">${max}</text>`;
     }
 
