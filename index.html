@@ -89,6 +89,20 @@
     .chartTitle { font-weight:800; color:#355747; margin-bottom:10px; }
     .chartWrap { width:100%; overflow:auto; }
     svg.chart { max-width:100%; height:160px; }
+    /* Profile dialog — mobile friendly */
+#profileDialog { width:min(560px, 94vw); border-radius:16px; }
+#profileDialog .pgrid { display:grid; gap:12px; place-items:center; text-align:center; }
+#profileDialog .prow  { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:560px){
+  #profileDialog .prow{ grid-template-columns:1fr; }
+}
+.avatar { width:84px; height:84px; border-radius:50%; object-fit:cover; border:3px solid #e6f4ea; }
+
+/* Custom file input */
+.fileBtn { display:inline-grid; place-items:center; padding:10px 14px; border-radius:10px; background:#eef4f0; cursor:pointer; }
+.fileBtn:active{ transform:translateY(1px); }
+#photoFileInput{ display:none; }        /* hide native control */
+#fileName { display:block; margin-top:6px; font-size:12px; color:#4a7c63; }
   </style>
 </head>
 <body>
@@ -208,29 +222,35 @@
 
   <!-- Profile -->
   <dialog id="profileDialog">
-    <form id="profileForm" method="dialog" style="padding:18px 18px 10px;">
-      <div style="display:grid; place-items:center; gap:8px; text-align:center">
-        <img id="profileAvatar" class="avatar" src="assets/RGicon.jpg" alt="">
-        <div style="font-weight:800" id="profileName">User</div>
-        <div class="muted" id="profileEmail">email@example.com</div>
+  <form id="profileForm" method="dialog" style="padding:18px">
+    <div class="pgrid">
+      <img id="profileAvatar" class="avatar" src="assets/RGicon.jpg" alt="">
+      <div id="profileName" style="font-weight:800">User</div>
+      <div id="profileEmail" class="muted">email@example.com</div>
+    </div>
+
+    <div class="prow" style="margin-top:12px">
+      <div>
+        <label>Display name</label>
+        <input id="displayNameInput" placeholder="Your name">
       </div>
-      <div style="margin-top:12px" class="row2">
-        <div>
-          <label>Display name</label>
-          <input id="displayNameInput" placeholder="Your name">
-        </div>
-        <div>
-          <label>Upload new photo (optional)</label>
+      <div>
+        <label>Upload new photo (optional)</label>
+        <label class="fileBtn">
           <input id="photoFileInput" type="file" accept="image/*">
-        </div>
+          <span>Choose photo</span>
+        </label>
+        <small id="fileName"></small>
       </div>
-      <menu style="margin-top:12px">
-        <button type="button" id="signOutBtn" class="btn ghost" style="margin-right:auto">Sign Out</button>
-        <button type="button" id="closeProfile" class="btn ghost">Close</button>
-        <button type="submit" class="btn primary">Save</button>
-      </menu>
-    </form>
-  </dialog>
+    </div>
+
+    <menu style="margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
+      <button type="button" id="signOutBtn" class="btn ghost" style="margin-right:auto">Sign Out</button>
+      <button type="button" id="closeProfile" class="btn ghost">Close</button>
+      <button type="submit" class="btn primary">Save</button>
+    </menu>
+  </form>
+</dialog>
 
   <!-- Plant Details -->
   <dialog id="plantDetailsDialog">
