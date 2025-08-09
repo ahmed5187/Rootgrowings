@@ -20,9 +20,9 @@
     .iconBtn { width:36px; height:36px; border-radius:10px; background:#e9f3ed; color:var(--green); border:0; display:grid; place-items:center; cursor:pointer; }
     .iconBtn svg{ width:18px; height:18px; }
 
-    /* Hero – taller */
-    .hero { width:100%; max-height:220px; overflow:hidden; border-bottom:1px solid #e2eee7; }
-    .hero img { width:100%; height:auto; display:block; object-fit:cover; }
+    /* Hero – a bit taller */
+    .hero { width:100%; max-height:260px; overflow:hidden; border-bottom:1px solid #e2eee7; }
+    .hero img { width:100%; height:260px; display:block; object-fit:cover; }
 
     main { padding:10px 12px 92px; max-width:980px; margin:0 auto; text-align:center; }
     h1.title { margin:12px 2px 8px; font-size:22px; font-weight:800; color:var(--green); letter-spacing:.3px; }
@@ -136,29 +136,32 @@
     </section>
 
     <h1 class="title" id="insightsTitle" style="display:none">Insights</h1>
-<section id="insightsPage" class="page">
-  <div class="chartCard">
-    <div class="chartTitle">Waterings — last 14 days</div>
-    <div class="chartWrap"><svg id="chart14Water" class="chart" viewBox="0 0 560 160"></svg></div>
-  </div>
-  <div class="chartCard">
-    <div class="chartTitle">Fertilizer — last 14 days</div>
-    <div class="chartWrap"><svg id="chart14Fert" class="chart" viewBox="0 0 560 160"></svg></div>
-  </div>
-  <div class="chartCard">
-    <div class="chartTitle">Waterings per plant</div>
-    <div class="chartWrap"><svg id="chartByPlant" class="chart" viewBox="0 0 560 160"></svg></div>
-  </div>
-  <div class="chartCard">
-    <div class="chartTitle">Waterings per room</div>
-    <div class="chartWrap"><svg id="chartByRoomWater" class="chart" viewBox="0 0 560 160"></svg></div>
-  </div>
-  <div class="chartCard">
-    <div class="chartTitle">Fertilizer per room</div>
-    <div class="chartWrap"><svg id="chartByRoomFert" class="chart" viewBox="0 0 560 160"></svg></div>
-  </div>
-</section>
+    <section id="insightsPage" class="page">
+      <div class="chartCard">
+        <div class="chartTitle">Waterings — last 14 days</div>
+        <div class="chartWrap"><svg id="chart14Water" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
+      <div class="chartCard">
+        <div class="chartTitle">Fertilizer — last 14 days</div>
+        <div class="chartWrap"><svg id="chart14Fert" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
+      <div class="chartCard">
+        <div class="chartTitle">Waterings per plant</div>
+        <div class="chartWrap"><svg id="chartByPlant" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
+      <div class="chartCard">
+        <div class="chartTitle">Waterings per room</div>
+        <div class="chartWrap"><svg id="chartByRoomWater" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
+      <div class="chartCard">
+        <div class="chartTitle">Fertilizer per room</div>
+        <div class="chartWrap"><svg id="chartByRoomFert" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
+    </section>
 
+    <section id="chatPage" class="page" style="display:none">
+      <div class="empty">Chat with us is coming soon!</div>
+    </section>
   </main>
 
   <nav>
@@ -235,9 +238,9 @@
       <div id="detailsImage" class="detailsImg"></div>
       <h3 id="detailsTitle" style="margin:12px 0 6px">Plant</h3>
       <div id="detailsMeta" class="muted" style="margin-bottom:12px">Room • Next due • Last watered</div>
+      <div id="detailsLogs" style="margin-bottom:10px"></div>
       <menu>
         <button type="button" id="detailsDeleteBtn" class="btn ghost" style="margin-right:auto">Delete</button>
-        <button type="button" id="detailsFertBtn" class="btn ghost">Fertilize</button>
         <button type="button" id="detailsCloseBtn" class="btn ghost">Close</button>
         <button type="button" id="detailsEditBtn" class="btn primary">Edit</button>
       </menu>
@@ -269,16 +272,30 @@
         </div>
       </div>
 
+      <!-- Left column: water schedule, interval, time. Right: fertilizer schedule, interval, time -->
       <div class="row2">
-        <div><label>Water schedule</label>
-          <select name="scheduleMode"><option value="suggested">Suggested</option><option value="custom">Custom</option></select>
+        <div>
+          <label>Water schedule</label>
+          <select name="scheduleMode">
+            <option value="suggested">Suggested</option>
+            <option value="custom">Custom</option>
+          </select>
+          <label style="margin-top:8px;">Custom interval days</label>
+          <input name="customIntervalDays" type="number" min="2" max="60" value="10">
+          <label style="margin-top:8px;">Water time (local)</label>
+          <input name="preferredWaterTime" type="time" value="09:00">
         </div>
-        <div><label>Custom interval days</label><input name="customIntervalDays" type="number" min="2" max="60" value="10"></div>
-      </div>
-
-      <div class="row2">
-        <div><label>Water time (local)</label><input name="preferredWaterTime" type="time" value="09:00"></div>
-        <div><label>Fertilizer interval days</label><input name="fertilizerIntervalDays" type="number" min="7" max="180" value="30"></div>
+        <div>
+          <label>Fertilizer schedule</label>
+          <select name="fertilizerSchedule">
+            <option value="off">Off</option>
+            <option value="interval">Interval</option>
+          </select>
+          <label style="margin-top:8px;">Fertilizer interval days</label>
+          <input name="fertilizerIntervalDays" type="number" min="7" max="180" value="30">
+          <label style="margin-top:8px;">Fertilizer time (local)</label>
+          <input name="preferredFertilizerTime" type="time" value="09:00">
+        </div>
       </div>
 
       <menu>
@@ -356,6 +373,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app_cloud.js?v=13"></script>
+  <script type="module" src="./app_cloud.js?v=15"></script>
 </body>
 </html>
