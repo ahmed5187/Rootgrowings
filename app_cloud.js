@@ -1,6 +1,10 @@
-// app_cloud.js v10
-// Centered UI, hero taller, card click -> details dialog,
-// rooms shown UPPERCASE, room names unique (case-insensitive) on add/rename.
+// app_cloud.js v12
+// - Due date + time (preferredWaterTime) and fertilizer intervals
+// - Local notification prompt + in-app minute scheduler (foreground)
+// - Profile photo upload (no URL field)
+// - Insights tab with simple SVG charts
+// - Logs subcollection for water/fertilize events
+// - Rooms unique case-insensitive, names uppercased in UI
 
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -11,7 +15,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, addDoc, onSnapshot,
-  updateDoc, deleteDoc
+  updateDoc, deleteDoc, getDocs, query, where, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL
@@ -38,19 +42,30 @@ authOverlay.innerHTML = `
 document.body.appendChild(authOverlay);
 
 /* ---------- DOM refs ---------- */
-const homePage = $('#homePage');
-const settingsPage = $('#settingsPage');
-const chatPage = $('#chatPage');
-const navHome = $('#navHome');
-const navSettings = $('#navSettings');
-const navChat = $('#navChat');
+const pages = {
+  home: $('#homePage'),
+  settings: $('#settingsPage'),
+  insights: $('#insightsPage'),
+  chat: $('#chatPage'),
+};
+const titles = {
+  home: $('#homeTitle'),
+  settings: $('#settingsTitle'),
+  insights: $('#insightsTitle')
+};
+const nav = {
+  home: $('#navHome'),
+  settings: $('#navSettings'),
+  insights: $('#navInsights'),
+  chat: $('#navChat'),
+};
+
 const plusBtn = $('#plusBtn');
 const profileBtn = $('#profileBtn');
-const homeTitle = $('#homeTitle');
-const settingsTitle = $('#settingsTitle');
 const homeContent = $('#homeContent');
 const homeEmpty = $('#homeEmpty');
 
+/* plant dialogs */
 const plantDialog = $('#plantDialog');
 const plantForm = $('#plantForm');
 const plantDialogTitle = $('#plantDialogTitle');
@@ -58,6 +73,7 @@ const deletePlantBtn = $('#deletePlantBtn');
 const cancelBtn = $('#cancelBtn');
 const roomSelect = $('#roomSelect');
 
+/* room dialogs */
 const addRoomDialog = $('#addRoomDialog');
 const addRoomForm = $('#addRoomForm');
 const addRoomCancel = $('#addRoomCancel');
@@ -73,6 +89,7 @@ const removeRoomDialog = $('#removeRoomDialog');
 const removeRoomForm = $('#removeRoomForm');
 const roomRemoveSelect = $('#roomRemoveSelect');
 
+/* plant chooser dialogs */
 const editPlantChooser = $('#editPlantChooser');
 const editPlantChooserForm = $('#editPlantChooserForm');
 const editPlantCancel = $('#editPlantCancel');
@@ -81,23 +98,28 @@ const removePlantForm = $('#removePlantForm');
 const plantEditSelect = $('#plantEditSelect');
 const plantRemoveSelect = $('#plantRemoveSelect');
 
-/* Profile */
+/* profile */
 const profileDialog = $('#profileDialog');
 const profileForm = $('#profileForm');
 const profileAvatar = $('#profileAvatar');
 const profileName = $('#profileName');
 const profileEmail = $('#profileEmail');
 const displayNameInput = $('#displayNameInput');
-const photoUrlInput = $('#photoUrlInput');
+const photoFileInput = $('#photoFileInput');
 const closeProfile = $('#closeProfile');
 const signOutBtn = $('#signOutBtn');
 
-/* Toast dialog */
+/* notifications */
+const notifyDialog = $('#notifyDialog');
+const notifyAllow = $('#notifyAllow');
+const notifyLater = $('#notifyLater');
+
+/* toast */
 const toastDialog = $('#toastDialog');
 const toastMsg = $('#toastMsg');
 const toastOk = $('#toastOk');
 
-/* Plant details dialog */
+/* details */
 const plantDetailsDialog = $('#plantDetailsDialog');
 const detailsImage = $('#detailsImage');
 const detailsTitle = $('#detailsTitle');
@@ -105,13 +127,23 @@ const detailsMeta = $('#detailsMeta');
 const detailsEditBtn = $('#detailsEditBtn');
 const detailsDeleteBtn = $('#detailsDeleteBtn');
 const detailsCloseBtn = $('#detailsCloseBtn');
+const detailsFertBtn = $('#detailsFertBtn');
 
-function showAppFrame(show){
-  [homePage, settingsPage, chatPage].forEach(p => p && (p.style.display = show ? '' : 'none'));
-}
-showAppFrame(false);
+/* insights charts */
+const chart14 = $('#chart14');
+const chartPlants = $('#chartPlants');
 
-/* ---------- Init ---------- */
+function showToast(msg='Saved'){ toastMsg.textContent=msg; toastDialog.showModal(); }
+toastOk.onclick = ()=> toastDialog.close();
+
+/* notifications prompt */
+notifyAllow.onclick = async ()=>{
+  try { await Notification.requestPermission(); } catch {}
+  notifyDialog.close();
+};
+notifyLater.onclick = ()=> notifyDialog.close();
+
+/* ---------- App init ---------- */
 (function init(){
   (async () => {
     const app = initializeApp(firebaseConfig);
@@ -135,45 +167,54 @@ showAppFrame(false);
     });
 
     try { const rr = await getRedirectResult(auth); if (rr?.user) boot(rr.user); } catch {}
-    onAuthStateChanged(auth, (u) => { if (!u) { showAppFrame(false); authOverlay.style.display='flex'; return; } boot(u); });
+    onAuthStateChanged(auth, (u) => { if (!u) { for (const p of Object.values(pages)) p.style.display='none'; authOverlay.style.display='flex'; return; } boot(u); });
 
     let booted=false, rooms=[], plants=[];
+    let schedulerTimer=null, currentDetailsId=null;
+
     function boot(u){
       if (booted) return; booted=true;
       authOverlay.style.display='none';
-      showAppFrame(true);
-      activate(homePage);
+      for (const p of Object.values(pages)) p.style.display='';
+      activate('home');
 
       startRooms();
       startPlants();
+      startScheduler(); // local minute checks
 
-      plusBtn.onclick = () => activate(settingsPage);
+      if (Notification && Notification.permission === 'default') {
+        setTimeout(()=> notifyDialog.showModal(), 600); // polite prompt
+      }
+
+      plusBtn.onclick = () => activate('settings');
       profileBtn.onclick = openProfile;
 
-      navHome.onclick = () => activate(homePage);
-      navSettings.onclick = () => activate(settingsPage);
-      navChat.onclick = () => activate(chatPage);
+      nav.home.onclick = () => activate('home');
+      nav.settings.onclick = () => activate('settings');
+      nav.insights.onclick = () => { activate('insights'); renderInsights(); };
+      nav.chat.onclick = () => activate('chat');
     }
 
-    function activate(page){
-      for (const el of document.querySelectorAll('.page')) el.classList.remove('active');
-      page.classList.add('active');
-      for (const b of [navHome, navSettings, navChat]) b && b.classList.remove('active');
-      if (page===homePage){ navHome.classList.add('active'); homeTitle.style.display='block'; settingsTitle.style.display='none'; }
-      if (page===settingsPage){ navSettings.classList.add('active'); homeTitle.style.display='none'; settingsTitle.style.display='block'; }
-      if (page===chatPage){ navChat.classList.add('active'); homeTitle.style.display='none'; settingsTitle.style.display='none'; }
+    function activate(key){
+      for (const k of Object.keys(pages)) pages[k].classList.remove('active');
+      pages[key].classList.add('active');
+
+      for (const k of Object.keys(nav)) nav[k]?.classList.remove('active');
+      nav[key]?.classList.add('active');
+
+      for (const k of Object.keys(titles)) titles[k].style.display = (k===key ? 'block' : 'none');
       window.scrollTo({ top:0, behavior:'instant' });
     }
 
     /* -------- Profile -------- */
-    function openProfile(){
+    async function openProfile(){
       const u = auth.currentUser;
       if (!u) return;
-      profileName.textContent = u.displayName || 'Anonymous plant lover';
+      profileName.textContent = u.displayName || 'Plant lover';
       profileEmail.textContent = u.email || '';
       profileAvatar.src = u.photoURL || 'assets/RGicon.jpg';
       displayNameInput.value = u.displayName || '';
-      photoUrlInput.value = u.photoURL || '';
+      photoFileInput.value = '';
       profileDialog.showModal();
     }
     closeProfile.onclick = () => profileDialog.close();
@@ -181,10 +222,22 @@ showAppFrame(false);
     profileForm.addEventListener('submit', async (e)=>{
       e.preventDefault();
       const u=auth.currentUser; if(!u) return;
+
+      // upload photo if any
+      let newPhotoURL = null;
+      const file = photoFileInput.files?.[0];
+      if (file && file.size){
+        if (file.size > 2*1024*1024){ alert('Image too large, max 2MB'); return; }
+        const ref = sRef(storage, `avatars/${u.uid}.jpg`);
+        const bytes = await file.arrayBuffer();
+        await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
+        newPhotoURL = await getDownloadURL(ref);
+      }
+
       try{
         await updateProfile(u,{
           displayName: displayNameInput.value.trim() || null,
-          photoURL: photoUrlInput.value.trim() || null
+          photoURL: newPhotoURL || u.photoURL || null
         });
         showToast('Profile updated');
       }catch{ showToast('Could not update profile'); }
@@ -208,16 +261,25 @@ showAppFrame(false);
       onSnapshot(q, s=>{
         plants = s.docs.map(d=>({id:d.id, ...d.data()}));
         renderHome(); renderPickers();
+        if (pages.insights.classList.contains('active')) renderInsights();
       });
     }
 
-    /* -------- Schedules -------- */
+    /* -------- Schedule helpers -------- */
     const baseIntervalDays = (t)=>({ 'Monstera deliciosa':7,'Epipremnum aureum':7,'Spathiphyllum':6,'Sansevieria':14,'Ficus elastica':10 }[t]||8);
     const lightFactor = v => v==='bright'?0.8 : v==='low'?1.2 : 1.0;
     const seasonFactor = d => { const m=d.getMonth()+1; if(m>=6&&m<=8) return 0.9; if(m===12||m<=2) return 1.1; return 1.0; };
     const potFactor = cm => !cm?1.0 : cm<12?0.9 : cm>18?1.1 : 1.0;
     function calcIntervalDays(p){ if(p.scheduleMode==='custom') return Number(p.customIntervalDays||10); const base=p.suggestedIntervalDays||baseIntervalDays(p.plantType); const f=lightFactor(p.lightLevel)*seasonFactor(new Date())*potFactor(Number(p.potSize)); return Math.max(2,Math.round(base*f)); }
-    function setNextDue(p){ const last=p.lastWateredUtc?new Date(p.lastWateredUtc):new Date(); const n=new Date(last); n.setUTCDate(n.getUTCDate()+calcIntervalDays(p)); p.suggestedIntervalDays=calcIntervalDays(p); p.nextDueUtc=n.toISOString(); }
+    function toNextWithTime(baseDateISO, intervalDays, hhmm='09:00'){
+      const base = baseDateISO ? new Date(baseDateISO) : new Date();
+      const [hh,mm] = (hhmm||'09:00').split(':').map(n=>parseInt(n,10));
+      const n = new Date(base);
+      n.setMinutes(0); n.setSeconds(0); n.setMilliseconds(0);
+      n.setDate(n.getDate()+intervalDays);
+      n.setHours(hh||9, mm||0, 0, 0);
+      return n.toISOString();
+    }
     const daysBetween = (a,b)=>Math.max(0,Math.ceil((b-a)/86400000));
     const roomIcon = name => (rooms.find(x=>x.name===name)?.icon || '🏷️');
     const allRoomNames = ()=> rooms.map(r=>r.name);
@@ -249,11 +311,10 @@ showAppFrame(false);
 
         for(const p of groups[room]){
           const total=daysBetween(new Date(p.lastWateredUtc), new Date(p.nextDueUtc))||1;
-          const left =daysBetween(new Date(), new Date(p.nextDueUtc));
+          const left =Math.max(0, Math.ceil((new Date(p.nextDueUtc)-new Date())/86400000));
           const pct  =Math.max(0,Math.min(100,Math.round(((total-left)/total)*100)));
 
           const card=document.createElement('div'); card.className='card';
-          // clicking card -> details (ignore internal buttons/gear)
           card.addEventListener('click', (e)=>{
             if (e.target.closest('.gear') || e.target.closest('.btn')) return;
             openDetails(p.id);
@@ -271,16 +332,17 @@ showAppFrame(false);
           photoWrap.append(img, ring);
 
           const title=document.createElement('div');
+          const due = new Date(p.nextDueUtc).toLocaleString();
           title.innerHTML=`<div class="name">${p.name}</div><div class="nick">${p.nickname||''}</div>`;
 
           const meta=document.createElement('div'); meta.className='meta';
-          meta.textContent = `Next due ${new Date(p.nextDueUtc).toLocaleDateString()}`;
+          meta.textContent = `Next due ${due}`;
 
           const actions=document.createElement('div'); actions.className='actions';
           const water=document.createElement('button'); water.className='btn primary'; water.textContent='Water';
-          water.onclick=async(e)=>{ e.stopPropagation(); const ref=doc(db,'users',auth.currentUser.uid,'plants',p.id); const now=new Date().toISOString(); await updateDoc(ref,{lastWateredUtc:now,updatedAt:now}); showToast('Watered'); };
+          water.onclick=async(e)=>{ e.stopPropagation(); await markWatered(p.id); };
           const snooze=document.createElement('button'); snooze.className='btn ghost'; snooze.textContent='Snooze';
-          snooze.onclick=async(e)=>{ e.stopPropagation(); const d=new Date(p.nextDueUtc); d.setUTCDate(d.getUTCDate()+1); await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); showToast('Snoozed 1 day'); };
+          snooze.onclick=async(e)=>{ e.stopPropagation(); const d=new Date(p.nextDueUtc); d.setUTCMinutes(d.getUTCMinutes()+60*24); await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); showToast('Snoozed 1 day'); };
           actions.append(water,snooze);
 
           card.append(gear,photoWrap,title,meta,actions);
@@ -290,8 +352,32 @@ showAppFrame(false);
       }
     }
 
+    /* ---- Water/Fertilize actions + logs ---- */
+    async function addLog(plantId, type){
+      await addDoc(collection(db,'users',auth.currentUser.uid,'plants',plantId,'logs'),{
+        type, ts: new Date().toISOString()
+      });
+    }
+    async function markWatered(plantId){
+      const ref = doc(db,'users',auth.currentUser.uid,'plants',plantId);
+      const p = plants.find(x=>x.id===plantId); if(!p) return;
+      const interval = calcIntervalDays(p);
+      const next = toNextWithTime(new Date().toISOString(), interval, p.preferredWaterTime || '09:00');
+      await updateDoc(ref,{ lastWateredUtc:new Date().toISOString(), nextDueUtc: next, updatedAt:new Date().toISOString() });
+      await addLog(plantId,'water');
+      showToast('Watered');
+    }
+    async function markFertilized(plantId){
+      const ref = doc(db,'users',auth.currentUser.uid,'plants',plantId);
+      const p = plants.find(x=>x.id===plantId); if(!p) return;
+      const days = Number(p.fertilizerIntervalDays || 30);
+      const next = toNextWithTime(new Date().toISOString(), days, p.preferredWaterTime || '09:00');
+      await updateDoc(ref,{ lastFertilizedUtc:new Date().toISOString(), nextFertilizeUtc: next, updatedAt:new Date().toISOString() });
+      await addLog(plantId,'fertilize');
+      showToast('Fertilized');
+    }
+
     /* -------- Details dialog -------- */
-    let currentDetailsId = null;
     function openDetails(id){
       const p = plants.find(x=>x.id===id); if(!p) return;
       currentDetailsId = id;
@@ -299,8 +385,8 @@ showAppFrame(false);
       detailsTitle.textContent = p.name + (p.nickname ? ` (${p.nickname})` : '');
       const meta = [
         (p.location || 'Unassigned'),
-        `Next: ${new Date(p.nextDueUtc).toLocaleDateString()}`,
-        `Last: ${new Date(p.lastWateredUtc || new Date()).toLocaleDateString()}`
+        `Water: next ${new Date(p.nextDueUtc).toLocaleString()}`,
+        `Fertilize: next ${p.nextFertilizeUtc ? new Date(p.nextFertilizeUtc).toLocaleDateString() : '—'}`
       ].join(' • ');
       detailsMeta.textContent = meta;
       plantDetailsDialog.showModal();
@@ -313,6 +399,7 @@ showAppFrame(false);
       plantDetailsDialog.close();
       showToast('Plant deleted');
     };
+    detailsFertBtn.onclick = async ()=>{ if(currentDetailsId){ await markFertilized(currentDetailsId); plantDetailsDialog.close(); } };
 
     /* -------- Icon grid helper -------- */
     function populateIconGrid(container){
@@ -340,7 +427,6 @@ showAppFrame(false);
       const icon=iconGrid.querySelector('.iconPick.selected')?.textContent || '🏷️';
       if(!name) return;
 
-      // Unique (case-insensitive)
       const exists = rooms.some(r => r.name.toLowerCase() === name.toLowerCase());
       if (exists){ showToast('Room name already exists'); return; }
 
@@ -358,10 +444,8 @@ showAppFrame(false);
 
       const roomDoc=rooms.find(r=>r.name===oldName); if(!roomDoc) return;
 
-      // If changing name, validate uniqueness (case-insensitive)
       if (newName && rooms.some(r => r.id!==roomDoc.id && r.name.toLowerCase() === newName.toLowerCase())){
-        showToast('Room name already exists');
-        return;
+        showToast('Room name already exists'); return;
       }
 
       const patch={}; if(newName) patch.name=newName; if(newIcon) patch.icon=newIcon;
@@ -405,14 +489,18 @@ showAppFrame(false);
       plantDialogTitle.textContent='Edit plant';
       deletePlantBtn.style.display='inline-block';
       plantForm.reset(); renderRoomOptions();
-      plantForm.querySelector('[name="name"]').value=p.name;
-      plantForm.querySelector('[name="nickname"]').value=p.nickname;
-      plantForm.querySelector('[name="plantType"]').value=p.plantType;
-      plantForm.querySelector('[name="location"]').value=p.location;
-      plantForm.querySelector('[name="potSize"]').value=p.potSize;
-      plantForm.querySelector('[name="lightLevel"]').value=p.lightLevel;
-      plantForm.querySelector('[name="scheduleMode"]').value=p.scheduleMode;
-      plantForm.querySelector('[name="customIntervalDays"]').value=p.customIntervalDays;
+
+      plantForm.querySelector('[name="name"]').value=p.name||'';
+      plantForm.querySelector('[name="nickname"]').value=p.nickname||'';
+      plantForm.querySelector('[name="plantType"]').value=p.plantType||'';
+      plantForm.querySelector('[name="location"]').value=p.location||'';
+      plantForm.querySelector('[name="potSize"]').value=p.potSize||15;
+      plantForm.querySelector('[name="lightLevel"]').value=p.lightLevel||'medium';
+      plantForm.querySelector('[name="scheduleMode"]').value=p.scheduleMode||'suggested';
+      plantForm.querySelector('[name="customIntervalDays"]').value=p.customIntervalDays||10;
+      plantForm.querySelector('[name="preferredWaterTime"]').value=p.preferredWaterTime||'09:00';
+      plantForm.querySelector('[name="fertilizerIntervalDays"]').value=p.fertilizerIntervalDays||30;
+
       plantForm.dataset.editing=id;
       plantDialog.showModal();
     }
@@ -437,7 +525,12 @@ showAppFrame(false);
         photoUrl=await getDownloadURL(ref);
       }
 
+      const preferredWaterTime = (fd.get('preferredWaterTime')||'09:00').toString();
+      const fertDays = Number(fd.get('fertilizerIntervalDays')||30);
+
       if(editing){
+        const p = plants.find(x=>x.id===editing) || {};
+        const nextDue = toNextWithTime(p.lastWateredUtc || new Date().toISOString(), calcIntervalDays(p), preferredWaterTime);
         const patch={
           name: fd.get('name'),
           nickname: fd.get('nickname')||'',
@@ -447,13 +540,16 @@ showAppFrame(false);
           lightLevel: fd.get('lightLevel')||'medium',
           scheduleMode: fd.get('scheduleMode')||'suggested',
           customIntervalDays: Number(fd.get('customIntervalDays')||10),
+          preferredWaterTime,
+          fertilizerIntervalDays: fertDays,
+          nextDueUtc: nextDue,
           updatedAt: new Date().toISOString()
         };
         if(photoUrl) patch.photoUrl=photoUrl;
         await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',editing), patch);
         showToast('Plant updated');
       } else {
-        const p={
+        const dummy = {
           name: fd.get('name'),
           nickname: fd.get('nickname')||'',
           photoUrl: photoUrl || DEFAULT_IMG,
@@ -463,20 +559,105 @@ showAppFrame(false);
           lightLevel: fd.get('lightLevel')||'medium',
           scheduleMode: fd.get('scheduleMode')||'suggested',
           customIntervalDays: Number(fd.get('customIntervalDays')||10),
+          preferredWaterTime,
+          fertilizerIntervalDays: fertDays,
           lastWateredUtc: new Date().toISOString(),
+          lastFertilizedUtc: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        setNextDue(p);
-        await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), p);
+        const nextWater = toNextWithTime(dummy.lastWateredUtc, calcIntervalDays(dummy), preferredWaterTime);
+        const nextFert = toNextWithTime(new Date().toISOString(), fertDays, preferredWaterTime);
+        dummy.nextDueUtc = nextWater;
+        dummy.nextFertilizeUtc = nextFert;
+        await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), dummy);
         showToast('Plant added');
       }
       plantDialog.close();
     });
 
-    /* -------- Toast -------- */
-    function showToast(msg='Saved'){ toastMsg.textContent=msg; toastDialog.showModal(); }
-    toastOk.onclick = ()=> toastDialog.close();
+    /* -------- Foreground scheduler (local notifications) -------- */
+    function startScheduler(){
+      if (schedulerTimer) clearInterval(schedulerTimer);
+      schedulerTimer = setInterval(checkDue, 60*1000); // every minute
+      checkDue();
+    }
+    async function checkDue(){
+      if (!('Notification' in window) || Notification.permission!=='granted') return;
+      const now = new Date();
+      for (const p of plants){
+        const due = p.nextDueUtc ? new Date(p.nextDueUtc) : null;
+        if (due && Math.abs(due - now) < 60*1000){ // within a minute
+          new Notification(`Water ${p.name}`, { body:`It’s time to water ${p.name}`, icon:'assets/RGicon.jpg' });
+        }
+        const fDue = p.nextFertilizeUtc ? new Date(p.nextFertilizeUtc) : null;
+        if (fDue && Math.abs(fDue - now) < 60*1000){
+          new Notification(`Fertilize ${p.name}`, { body:`Fertilizer reminder for ${p.name}`, icon:'assets/RGicon.jpg' });
+        }
+      }
+    }
+    // NOTE: For background push, add Firebase Cloud Messaging (FCM) + service worker.
+
+    /* -------- Insights (simple SVG charts) -------- */
+    async function renderInsights(){
+      // Last 14 days: water logs
+      const end = new Date();
+      const start = new Date(); start.setDate(end.getDate()-13); // inclusive 14 days
+      const dayKey = d => d.toISOString().slice(0,10);
+
+      const countsByDay = {};
+      for(let i=0;i<14;i++){ const x=new Date(start); x.setDate(start.getDate()+i); countsByDay[dayKey(x)]=0; }
+
+      const countsByPlant = {}; // name -> count
+
+      for (const p of plants){
+        countsByPlant[p.name]=0;
+        const logsSnap = await getDocs(query(
+          collection(db,'users',auth.currentUser.uid,'plants',p.id,'logs'),
+        ));
+        logsSnap.forEach(docu=>{
+          const L = docu.data();
+          if (L.type==='water'){
+            const t = new Date(L.ts);
+            if (t>=start && t<=end){
+              countsByDay[dayKey(t)] = (countsByDay[dayKey(t)]||0)+1;
+            }
+            countsByPlant[p.name] = (countsByPlant[p.name]||0)+1;
+          }
+        });
+      }
+
+      drawBars(chart14, Object.keys(countsByDay), Object.values(countsByDay));
+      drawBars(chartPlants, Object.keys(countsByPlant), Object.values(countsByPlant));
+    }
+
+    function drawBars(svgEl, labels, values){
+      const W=560, H=160, PAD=28;
+      const max=Math.max(1, ...values);
+      const bw=(W-2*PAD)/Math.max(1, values.length);
+      svgEl.innerHTML='';
+      // axes
+      svgEl.innerHTML += `<line x1="${PAD}" y1="${H-PAD}" x2="${W-PAD}" y2="${H-PAD}" stroke="#cfe0d6"/>`;
+      svgEl.innerHTML += `<line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H-PAD}" stroke="#cfe0d6"/>`;
+
+      values.forEach((v,i)=>{
+        const h = (H-2*PAD) * (v/max);
+        const x = PAD + i*bw + 4;
+        const y = (H-PAD) - h;
+        svgEl.innerHTML += `<rect x="${x}" y="${y}" width="${bw-8}" height="${h}" rx="4" fill="#2e7d4e"/>`;
+      });
+
+      // small x labels (sparse to avoid clutter)
+      const step = Math.ceil(values.length/7);
+      labels.forEach((lab,i)=>{
+        if (i%step!==0) return;
+        const x = PAD + i*bw + (bw/2);
+        svgEl.innerHTML += `<text x="${x}" y="${H-8}" text-anchor="middle" font-size="9" fill="#4a7c63">${lab.slice(5)}</text>`;
+      });
+
+      // max label
+      svgEl.innerHTML += `<text x="${PAD-6}" y="${PAD-6}" text-anchor="end" font-size="10" fill="#4a7c63">${max}</text>`;
+    }
 
   })();
 })();
