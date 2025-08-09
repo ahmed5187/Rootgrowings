@@ -4,28 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RootGrowings</title>
+
+  <!-- Favicon -->
+  <link rel="icon" href="assets/favicon.png" type="image/png">
+
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b6b2f">
   <style>
     * { box-sizing: border-box; }
-    :root { --green:#0b6b2f; --green2:#2e7d4e; --bg:#f6f8f7; --ink:#0b2d18; }
+    :root { --green:#0b6b2f; --green2:#2e7d4e; --bg:#f6f8f7; --ink:#0b2d18; --muted:#4a7c63; }
     body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: var(--bg); color: var(--ink); }
 
     /* Header */
-    header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; border-bottom: 1px solid #e2eee7; z-index: 3; }
-    .headWrap { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e2eee7; z-index: 3; }
     header img.logo { height: 28px; width: auto; }
-    .iconBar { display:flex; align-items:center; gap:10px; }
-    .iconBtn {
-      background:#eaf5ef; border:1px solid #cfe0d6; color:#14532d;
-      width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
-      cursor:pointer; font-size:18px;
-    }
-    .iconBtn:hover { filter:brightness(.98); }
+    header .spacer { flex: 1; }
+    .iconBtn { width: 36px; height: 36px; border-radius: 10px; background: #e9f3ed; color: var(--green); border: 0; display:grid; place-items:center; cursor:pointer; }
+    .iconBtn:active { transform: translateY(1px); }
+    .iconBtn svg{ width:18px; height:18px; }
 
-    /* Main */
+    /* Hero banner */
+    .hero { width:100%; max-height:120px; overflow:hidden; border-bottom:1px solid #e2eee7; }
+    .hero img { width:100%; height:auto; display:block; object-fit:cover; }
+
     main { padding: 10px 12px 92px; max-width: 860px; margin: 0 auto; }
-    h1.title { margin: 6px 2px 8px; font-size: 22px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
+    h1.title { margin: 12px 2px 8px; font-size: 22px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
 
     .section { margin: 10px 0 18px; }
     .section h3 { margin: 10px 4px; font-size: 15px; color: #4a7c63; font-weight: 800; display:flex; align-items:center; gap:8px; }
@@ -43,7 +46,7 @@
     .nick { color: #46795b; font-size: 12px; }
     .meta { font-size: 11px; color: #355747; }
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .btn { border: 0; padding: 8px; border-radius: 10px; cursor: pointer; font-weight: 700; }
+    .btn { border: 0; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 700; }
     .btn.primary { background: var(--green); color:#fff; }
     .btn.ghost { background: #eef4f0; color: var(--ink); }
     .empty { text-align: center; color: #507a65; padding: 40px 10px; }
@@ -54,56 +57,53 @@
     .navIcon { width: 22px; height: 22px; }
     .active { color: var(--green); font-weight: 800; }
 
-    /* Pages */
     .page { display: none; }
     .page.active { display: block; }
 
-    /* Settings forms */
     .settings { display: grid; gap: 12px; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     input, select { width: 100%; padding: 10px; border: 1px solid #cfe0d6; border-radius: 8px; }
     label { font-size: 12px; color: #355747; }
     .btnRow { display:flex; gap:10px; flex-wrap:wrap; }
-    dialog { border: 0; border-radius: 12px; width: min(520px, 92vw); }
+
+    dialog { border: 0; border-radius: 14px; width: min(520px, 92vw); }
     menu { display: flex; justify-content: end; gap: 8px; }
     .iconGrid { display:grid; grid-template-columns: repeat(8, 1fr); gap:8px; }
     .iconPick { border:1px solid #cfe0d6; border-radius:8px; padding:6px; cursor:pointer; background:#fff; }
     .iconPick.selected { outline:2px solid var(--green); }
 
-    /* Center toast that doesn't block clicks */
-    .toast {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%,-50%) scale(.98);
-      background: #14532d; color: #fff;
-      padding: 14px 18px; border-radius: 12px; font-size: 14px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.12);
-      opacity: 0; transition: opacity .25s ease, transform .25s ease;
-      z-index: 4; pointer-events: none;
-      display:flex; align-items:center; gap:10px;
-    }
-    .toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-    .toast .tick { width:22px; height:22px; border-radius:999px; background:#fff; color:#14532d; display:grid; place-items:center; font-weight:900; }
+    /* Centered confirmation modal */
+    #toastDialog::backdrop { background: rgba(0,0,0,.15); }
+    .toastBox { display:grid; place-items:center; gap:10px; text-align:center; padding:18px; }
+    .toastIcon { width:34px; height:34px; border-radius:999px; background:#e6f4ea; color:var(--green); display:grid; place-items:center; }
+    .toastMsg { color:#264d36; font-weight:700; }
 
     /* Profile dialog */
-    .profileDialog::backdrop { background: rgba(0,0,0,.15); }
-    .profileCard { padding:18px 20px; background:#fff; border-radius:12px; width:min(420px,92vw); position:relative; }
-    .xBtn {
-      position:absolute; top:8px; right:8px; width:32px; height:32px;
-      border-radius:8px; border:1px solid #cfe0d6; background:#f4f8f6; cursor:pointer;
-      font-size:18px; line-height:30px;
-    }
+    #profileDialog::backdrop { background: rgba(0,0,0,.2); }
+    .avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; border:3px solid #e6f4ea; }
+    .muted { color: var(--muted); font-size:12px; }
   </style>
 </head>
 <body>
   <header>
-    <div class="headWrap">
-      <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
-      <div class="iconBar">
-        <button id="plusBtn" class="iconBtn" title="Add">+</button>
-        <button id="profileBtn" class="iconBtn" title="Profile">👤</button>
-      </div>
-    </div>
+    <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
+    <div class="spacer"></div>
+
+    <!-- Add plant shortcut (goes to settings tab) -->
+    <button id="plusBtn" class="iconBtn" title="Add">
+      <svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
+    </button>
+
+    <!-- Profile -->
+    <button id="profileBtn" class="iconBtn" title="Profile">
+      <svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z" fill="currentColor"/></svg>
+    </button>
   </header>
+
+  <!-- Slim banner under header -->
+  <div class="hero">
+    <img src="assets/hero.jpg" alt="">
+  </div>
 
   <main>
     <h1 class="title" id="homeTitle">My Plants</h1>
@@ -138,6 +138,7 @@
     </section>
   </main>
 
+  <!-- Bottom nav -->
   <nav>
     <button id="navSettings">
       <svg class="navIcon" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.5-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.2l-.4 2.6c-.6.2-1.2.5-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.2 1.2-.5 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.6.1-1Z" fill="currentColor"/></svg>
@@ -153,37 +154,46 @@
     </button>
   </nav>
 
-  <!-- Profile dialog -->
-  <dialog id="profileDialog" class="profileDialog">
-    <div class="profileCard">
-      <button id="profileClose" class="xBtn" aria-label="Close">×</button>
-
-      <!-- View mode -->
-      <div id="profileView" style="text-align:center; padding:10px 0 4px">
-        <div style="font-size:40px; line-height:1">👤</div>
-        <h3 id="profileName" style="margin:8px 0 4px"></h3>
-        <p id="profileEmail" style="color:#555; font-size:14px; margin:0 0 10px"></p>
-        <div class="btnRow" style="justify-content:center">
-          <button id="editProfileBtn" class="btn">Edit Info</button>
-          <button id="signOutBtn" class="btn ghost">Sign Out</button>
-        </div>
+  <!-- Confirmation dialog (centered) -->
+  <dialog id="toastDialog">
+    <div class="toastBox">
+      <div class="toastIcon">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M9.5 16.2 5.3 12l1.4-1.4 2.8 2.8 7.8-7.8L18.7 7z"/></svg>
       </div>
-
-      <!-- Edit mode -->
-      <form id="profileForm" style="display:none">
-        <label>Display name</label>
-        <input id="profileNameInput" placeholder="Your name">
-        <label>Email</label>
-        <input id="profileEmailInput" disabled>
-        <menu>
-          <button type="button" id="cancelProfileBtn" class="btn ghost">Cancel</button>
-          <button type="submit" id="saveProfileBtn" class="btn primary">Save</button>
-        </menu>
-      </form>
+      <div id="toastMsg" class="toastMsg">Saved</div>
+      <menu><button class="btn primary" id="toastOk">OK</button></menu>
     </div>
   </dialog>
 
-  <!-- CRUD dialogs (unchanged) -->
+  <!-- Profile dialog -->
+  <dialog id="profileDialog">
+    <form id="profileForm" method="dialog" style="padding:18px 18px 10px;">
+      <div style="display:grid; place-items:center; gap:8px; text-align:center">
+        <img id="profileAvatar" class="avatar" src="assets/RGicon.jpg" alt="">
+        <div style="font-weight:800" id="profileName">User</div>
+        <div class="muted" id="profileEmail">email@example.com</div>
+      </div>
+
+      <div style="margin-top:12px" class="row2">
+        <div>
+          <label>Display name</label>
+          <input id="displayNameInput" placeholder="Your name">
+        </div>
+        <div>
+          <label>Photo URL (optional)</label>
+          <input id="photoUrlInput" placeholder="https://">
+        </div>
+      </div>
+
+      <menu style="margin-top:12px">
+        <button type="button" id="signOutBtn" class="btn ghost" style="margin-right:auto">Sign Out</button>
+        <button type="button" id="closeProfile" class="btn ghost">Close</button>
+        <button type="submit" class="btn primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Plant & Room dialogs (unchanged) -->
   <dialog id="plantDialog">
     <form id="plantForm" method="dialog">
       <h3 id="plantDialogTitle">Add plant</h3>
@@ -311,11 +321,6 @@
     </form>
   </dialog>
 
-  <!-- Center toast -->
-  <div id="toast" class="toast"><span class="tick">✓</span><span id="toastText"></span></div>
-
-  <script type="module">
-    import './app_cloud.js?v=9';
-  </script>
+  <script type="module" src="./app_cloud.js?v=9"></script>
 </body>
 </html>
