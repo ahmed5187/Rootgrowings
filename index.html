@@ -5,83 +5,84 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RootGrowings</title>
 
-  <!-- Favicon -->
   <link rel="icon" href="assets/favicon.png" type="image/png">
-
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b6b2f">
   <style>
     * { box-sizing: border-box; }
     :root { --green:#0b6b2f; --green2:#2e7d4e; --bg:#f6f8f7; --ink:#0b2d18; --muted:#4a7c63; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: var(--bg); color: var(--ink); }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); }
 
     /* Header */
-    header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e2eee7; z-index: 3; }
-    header img.logo { height: 28px; width: auto; }
-    header .spacer { flex: 1; }
-    .iconBtn { width: 36px; height: 36px; border-radius: 10px; background: #e9f3ed; color: var(--green); border: 0; display:grid; place-items:center; cursor:pointer; }
-    .iconBtn:active { transform: translateY(1px); }
+    header { position:sticky; top:0; background:var(--bg); padding:8px 12px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #e2eee7; z-index:3; }
+    header img.logo { height:28px; width:auto; }
+    header .spacer { flex:1; }
+    .iconBtn { width:36px; height:36px; border-radius:10px; background:#e9f3ed; color:var(--green); border:0; display:grid; place-items:center; cursor:pointer; }
     .iconBtn svg{ width:18px; height:18px; }
 
-    /* Hero banner */
-    .hero { width:100%; max-height:120px; overflow:hidden; border-bottom:1px solid #e2eee7; }
+    /* Hero – taller */
+    .hero { width:100%; max-height:200px; overflow:hidden; border-bottom:1px solid #e2eee7; }
     .hero img { width:100%; height:auto; display:block; object-fit:cover; }
 
-    main { padding: 10px 12px 92px; max-width: 860px; margin: 0 auto; }
-    h1.title { margin: 12px 2px 8px; font-size: 22px; font-weight: 800; color: var(--green); letter-spacing: .3px; }
+    main { padding:10px 12px 92px; max-width:860px; margin:0 auto; text-align:center; }
+    h1.title { margin:12px 2px 8px; font-size:22px; font-weight:800; color:var(--green); letter-spacing:.3px; }
 
-    .section { margin: 10px 0 18px; }
-    .section h3 { margin: 10px 4px; font-size: 15px; color: #4a7c63; font-weight: 800; display:flex; align-items:center; gap:8px; }
-    .roomIcon { width: 18px; height:18px; display:inline-grid; place-items:center; background:#eaf5ef; border-radius:6px; font-size:12px; }
-    .group { background: #eaf5ef; border-radius: 16px; padding: 10px; }
-    .row { display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 10px; }
-    .card { background: #fff; border-radius: 16px; padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.05); display: grid; gap: 8px; align-content: start; position: relative; }
-    .photoWrap { position: relative; }
-    .photo { width: 100%; aspect-ratio: 1/1; border-radius: 12px; background: #e8efe9 center/cover no-repeat; }
-    .ring { position: absolute; top: 8px; left: 8px; width: 42px; height: 42px; border-radius: 50%; background: conic-gradient(var(--green2) var(--pct), #e5ece7 0); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--green); }
-    .ring span { background: #fff; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; }
-    .gear { position:absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; border:0; background:#ffffffcc; display:grid; place-items:center; cursor:pointer; }
-    .gear svg { width: 16px; height:16px; color:#4a7c63; }
-    .name { font-weight: 800; font-size: 14px; }
-    .nick { color: #46795b; font-size: 12px; }
-    .meta { font-size: 11px; color: #355747; }
-    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .btn { border: 0; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 700; }
-    .btn.primary { background: var(--green); color:#fff; }
-    .btn.ghost { background: #eef4f0; color: var(--ink); }
-    .empty { text-align: center; color: #507a65; padding: 40px 10px; }
+    .section { margin:14px 0 22px; }
+    .section h3 { margin:10px 4px; font-size:15px; color:#4a7c63; font-weight:800; display:flex; align-items:center; gap:8px; justify-content:center; }
+    .roomIcon { width:18px; height:18px; display:inline-grid; place-items:center; background:#eaf5ef; border-radius:6px; font-size:12px; }
+    .group { background:#eaf5ef; border-radius:16px; padding:12px; }
+    .row { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px; place-items:center; }
+    .card { width:100%; max-width:260px; background:#fff; border-radius:16px; padding:10px; box-shadow:0 2px 10px rgba(0,0,0,.05); display:grid; gap:8px; align-content:start; position:relative; text-align:center; cursor:pointer; }
+    .photoWrap { position:relative; }
+    .photo { width:100%; aspect-ratio:1/1; border-radius:12px; background:#e8efe9 center/cover no-repeat; }
+    .ring { position:absolute; top:8px; left:8px; width:42px; height:42px; border-radius:50%; background:conic-gradient(var(--green2) var(--pct), #e5ece7 0); display:grid; place-items:center; font-size:11px; font-weight:700; color:var(--green); }
+    .ring span { background:#fff; width:30px; height:30px; border-radius:50%; display:grid; place-items:center; }
+    .gear { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; border:0; background:#ffffffcc; display:grid; place-items:center; cursor:pointer; }
+    .gear svg { width:16px; height:16px; color:#4a7c63; }
+    .name { font-weight:800; font-size:14px; }
+    .nick { color:#46795b; font-size:12px; }
+    .meta { font-size:11px; color:#355747; }
+    .actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .btn { border:0; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700; }
+    .btn.primary { background:var(--green); color:#fff; }
+    .btn.ghost { background:#eef4f0; color:var(--ink); }
+    .empty { text-align:center; color:#507a65; padding:40px 10px; }
 
     /* Bottom nav */
-    nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e2eee7; display: grid; grid-template-columns: repeat(3,1fr); padding: 8px 10px; z-index: 5; }
-    nav button { background: transparent; border: 0; padding: 8px; font-size: 12px; color: #4a7c63; display: grid; place-items: center; gap: 4px; cursor: pointer; }
-    .navIcon { width: 22px; height: 22px; }
-    .active { color: var(--green); font-weight: 800; }
+    nav { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e2eee7; display:grid; grid-template-columns:repeat(3,1fr); padding:8px 10px; z-index:5; }
+    nav button { background:transparent; border:0; padding:8px; font-size:12px; color:#4a7c63; display:grid; place-items:center; gap:4px; cursor:pointer; }
+    .navIcon { width:22px; height:22px; }
+    .active { color:var(--green); font-weight:800; }
 
-    .page { display: none; }
-    .page.active { display: block; }
+    .page { display:none; }
+    .page.active { display:block; }
 
-    .settings { display: grid; gap: 12px; }
-    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    input, select { width: 100%; padding: 10px; border: 1px solid #cfe0d6; border-radius: 8px; }
-    label { font-size: 12px; color: #355747; }
-    .btnRow { display:flex; gap:10px; flex-wrap:wrap; }
+    .settings { display:grid; gap:12px; text-align:center; }
+    .btnRow { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    input, select { width:100%; padding:10px; border:1px solid #cfe0d6; border-radius:8px; }
+    label { font-size:12px; color:#355747; }
 
-    dialog { border: 0; border-radius: 14px; width: min(520px, 92vw); }
-    menu { display: flex; justify-content: end; gap: 8px; }
-    .iconGrid { display:grid; grid-template-columns: repeat(8, 1fr); gap:8px; }
+    dialog { border:0; border-radius:14px; width:min(520px,92vw); }
+    menu { display:flex; justify-content:center; gap:8px; }
+    .iconGrid { display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
     .iconPick { border:1px solid #cfe0d6; border-radius:8px; padding:6px; cursor:pointer; background:#fff; }
     .iconPick.selected { outline:2px solid var(--green); }
 
-    /* Centered confirmation modal */
-    #toastDialog::backdrop { background: rgba(0,0,0,.15); }
+    /* Confirmation modal */
+    #toastDialog::backdrop { background:rgba(0,0,0,.15); }
     .toastBox { display:grid; place-items:center; gap:10px; text-align:center; padding:18px; }
     .toastIcon { width:34px; height:34px; border-radius:999px; background:#e6f4ea; color:var(--green); display:grid; place-items:center; }
     .toastMsg { color:#264d36; font-weight:700; }
 
-    /* Profile dialog */
-    #profileDialog::backdrop { background: rgba(0,0,0,.2); }
+    /* Profile */
+    #profileDialog::backdrop { background:rgba(0,0,0,.2); }
     .avatar { width:64px; height:64px; border-radius:50%; object-fit:cover; border:3px solid #e6f4ea; }
-    .muted { color: var(--muted); font-size:12px; }
+    .muted { color:var(--muted); font-size:12px; }
+
+    /* Plant details */
+    #plantDetailsDialog::backdrop { background:rgba(0,0,0,.2); }
+    .detailsImg { width:100%; aspect-ratio:16/9; border-radius:12px; background:#e8efe9 center/cover no-repeat; }
   </style>
 </head>
 <body>
@@ -89,18 +90,14 @@
     <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
     <div class="spacer"></div>
 
-    <!-- Add plant shortcut (goes to settings tab) -->
     <button id="plusBtn" class="iconBtn" title="Add">
       <svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
     </button>
-
-    <!-- Profile -->
     <button id="profileBtn" class="iconBtn" title="Profile">
       <svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z" fill="currentColor"/></svg>
     </button>
   </header>
 
-  <!-- Slim banner under header -->
   <div class="hero">
     <img src="assets/hero.jpg" alt="">
   </div>
@@ -138,7 +135,6 @@
     </section>
   </main>
 
-  <!-- Bottom nav -->
   <nav>
     <button id="navSettings">
       <svg class="navIcon" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.5-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.2l-.4 2.6c-.6.2-1.2.5-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.2 1.2-.5 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.6.1-1Z" fill="currentColor"/></svg>
@@ -154,7 +150,7 @@
     </button>
   </nav>
 
-  <!-- Confirmation dialog (centered) -->
+  <!-- Confirmation -->
   <dialog id="toastDialog">
     <div class="toastBox">
       <div class="toastIcon">
@@ -165,7 +161,7 @@
     </div>
   </dialog>
 
-  <!-- Profile dialog -->
+  <!-- Profile -->
   <dialog id="profileDialog">
     <form id="profileForm" method="dialog" style="padding:18px 18px 10px;">
       <div style="display:grid; place-items:center; gap:8px; text-align:center">
@@ -173,7 +169,6 @@
         <div style="font-weight:800" id="profileName">User</div>
         <div class="muted" id="profileEmail">email@example.com</div>
       </div>
-
       <div style="margin-top:12px" class="row2">
         <div>
           <label>Display name</label>
@@ -184,7 +179,6 @@
           <input id="photoUrlInput" placeholder="https://">
         </div>
       </div>
-
       <menu style="margin-top:12px">
         <button type="button" id="signOutBtn" class="btn ghost" style="margin-right:auto">Sign Out</button>
         <button type="button" id="closeProfile" class="btn ghost">Close</button>
@@ -193,58 +187,45 @@
     </form>
   </dialog>
 
-  <!-- Plant & Room dialogs (unchanged) -->
+  <!-- Plant Details -->
+  <dialog id="plantDetailsDialog">
+    <div style="padding:16px">
+      <div id="detailsImage" class="detailsImg"></div>
+      <h3 id="detailsTitle" style="margin:12px 0 6px">Plant</h3>
+      <div id="detailsMeta" class="muted" style="margin-bottom:12px">Room • Next due • Last watered</div>
+      <menu>
+        <button type="button" id="detailsDeleteBtn" class="btn ghost" style="margin-right:auto">Delete</button>
+        <button type="button" id="detailsCloseBtn" class="btn ghost">Close</button>
+        <button type="button" id="detailsEditBtn" class="btn primary">Edit</button>
+      </menu>
+    </div>
+  </dialog>
+
+  <!-- Plant & Room dialogs (unchanged fields) -->
   <dialog id="plantDialog">
     <form id="plantForm" method="dialog">
       <h3 id="plantDialogTitle">Add plant</h3>
       <div class="row2">
-        <div>
-          <label>Name</label>
-          <input name="name" required placeholder="Monstera">
-        </div>
-        <div>
-          <label>Nickname</label>
-          <input name="nickname" placeholder="Mo">
-        </div>
+        <div><label>Name</label><input name="name" required placeholder="Monstera"></div>
+        <div><label>Nickname</label><input name="nickname" placeholder="Mo"></div>
       </div>
       <label>Photo</label>
       <input name="photo" type="file" accept="image/*">
       <div class="row2">
-        <div>
-          <label>Plant type</label>
-          <input name="plantType" placeholder="Monstera deliciosa">
-        </div>
-        <div>
-          <label>Room</label>
-          <select name="location" id="roomSelect"></select>
+        <div><label>Plant type</label><input name="plantType" placeholder="Monstera deliciosa"></div>
+        <div><label>Room</label><select name="location" id="roomSelect"></select></div>
+      </div>
+      <div class="row2">
+        <div><label>Pot size cm</label><input name="potSize" type="number" min="5" max="40" step="1" value="15"></div>
+        <div><label>Light level</label>
+          <select name="lightLevel"><option value="medium">Medium</option><option value="bright">Bright</option><option value="low">Low</option></select>
         </div>
       </div>
       <div class="row2">
-        <div>
-          <label>Pot size cm</label>
-          <input name="potSize" type="number" min="5" max="40" step="1" value="15">
+        <div><label>Schedule</label>
+          <select name="scheduleMode"><option value="suggested">Suggested</option><option value="custom">Custom</option></select>
         </div>
-        <div>
-          <label>Light level</label>
-          <select name="lightLevel">
-            <option value="medium">Medium</option>
-            <option value="bright">Bright</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-      </div>
-      <div class="row2">
-        <div>
-          <label>Schedule</label>
-          <select name="scheduleMode">
-            <option value="suggested">Suggested</option>
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-        <div>
-          <label>Custom interval days</label>
-          <input name="customIntervalDays" type="number" min="2" max="60" value="10">
-        </div>
+        <div><label>Custom interval days</label><input name="customIntervalDays" type="number" min="2" max="60" value="10"></div>
       </div>
       <menu>
         <button type="button" id="deletePlantBtn" class="btn ghost" style="margin-right:auto; display:none">Delete</button>
@@ -321,6 +302,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app_cloud.js?v=9"></script>
+  <script type="module" src="./app_cloud.js?v=10"></script>
 </body>
 </html>
