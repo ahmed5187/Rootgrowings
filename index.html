@@ -21,10 +21,10 @@
     .iconBtn svg{ width:18px; height:18px; }
 
     /* Hero – taller */
-    .hero { width:100%; max-height:200px; overflow:hidden; border-bottom:1px solid #e2eee7; }
+    .hero { width:100%; max-height:220px; overflow:hidden; border-bottom:1px solid #e2eee7; }
     .hero img { width:100%; height:auto; display:block; object-fit:cover; }
 
-    main { padding:10px 12px 92px; max-width:860px; margin:0 auto; text-align:center; }
+    main { padding:10px 12px 92px; max-width:980px; margin:0 auto; text-align:center; }
     h1.title { margin:12px 2px 8px; font-size:22px; font-weight:800; color:var(--green); letter-spacing:.3px; }
 
     .section { margin:14px 0 22px; }
@@ -49,7 +49,7 @@
     .empty { text-align:center; color:#507a65; padding:40px 10px; }
 
     /* Bottom nav */
-    nav { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e2eee7; display:grid; grid-template-columns:repeat(3,1fr); padding:8px 10px; z-index:5; }
+    nav { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e2eee7; display:grid; grid-template-columns:repeat(4,1fr); padding:8px 10px; z-index:5; }
     nav button { background:transparent; border:0; padding:8px; font-size:12px; color:#4a7c63; display:grid; place-items:center; gap:4px; cursor:pointer; }
     .navIcon { width:22px; height:22px; }
     .active { color:var(--green); font-weight:800; }
@@ -63,13 +63,13 @@
     input, select { width:100%; padding:10px; border:1px solid #cfe0d6; border-radius:8px; }
     label { font-size:12px; color:#355747; }
 
-    dialog { border:0; border-radius:14px; width:min(520px,92vw); }
+    dialog { border:0; border-radius:14px; width:min(540px,92vw); }
     menu { display:flex; justify-content:center; gap:8px; }
     .iconGrid { display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
     .iconPick { border:1px solid #cfe0d6; border-radius:8px; padding:6px; cursor:pointer; background:#fff; }
     .iconPick.selected { outline:2px solid var(--green); }
 
-    /* Confirmation modal */
+    /* Confirmation */
     #toastDialog::backdrop { background:rgba(0,0,0,.15); }
     .toastBox { display:grid; place-items:center; gap:10px; text-align:center; padding:18px; }
     .toastIcon { width:34px; height:34px; border-radius:999px; background:#e6f4ea; color:var(--green); display:grid; place-items:center; }
@@ -83,13 +83,18 @@
     /* Plant details */
     #plantDetailsDialog::backdrop { background:rgba(0,0,0,.2); }
     .detailsImg { width:100%; aspect-ratio:16/9; border-radius:12px; background:#e8efe9 center/cover no-repeat; }
+
+    /* Insights */
+    .chartCard { background:#fff; border-radius:16px; padding:14px; box-shadow:0 2px 10px rgba(0,0,0,.05); margin-bottom:14px; text-align:center; }
+    .chartTitle { font-weight:800; color:#355747; margin-bottom:10px; }
+    .chartWrap { width:100%; overflow:auto; }
+    svg.chart { max-width:100%; height:160px; }
   </style>
 </head>
 <body>
   <header>
     <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
     <div class="spacer"></div>
-
     <button id="plusBtn" class="iconBtn" title="Add">
       <svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
     </button>
@@ -130,8 +135,16 @@
       </div>
     </section>
 
-    <section id="chatPage" class="page">
-      <div class="empty">Chat with us is coming soon!</div>
+    <h1 class="title" id="insightsTitle" style="display:none">Insights</h1>
+    <section id="insightsPage" class="page">
+      <div class="chartCard">
+        <div class="chartTitle">Waterings — last 14 days</div>
+        <div class="chartWrap"><svg id="chart14" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
+      <div class="chartCard">
+        <div class="chartTitle">Waterings per plant</div>
+        <div class="chartWrap"><svg id="chartPlants" class="chart" viewBox="0 0 560 160"></svg></div>
+      </div>
     </section>
   </main>
 
@@ -143,6 +156,10 @@
     <button id="navHome" class="active">
       <svg class="navIcon" viewBox="0 0 24 24"><path d="M12 3 2 11h3v10h6V15h2v6h6V11h3L12 3Z" fill="currentColor"/></svg>
       <span>Home</span>
+    </button>
+    <button id="navInsights">
+      <svg class="navIcon" viewBox="0 0 24 24"><path d="M3 13h4v8H3v-8Zm7-6h4v14h-4V7Zm7-4h4v18h-4V3Z" fill="currentColor"/></svg>
+      <span>Insights</span>
     </button>
     <button id="navChat">
       <svg class="navIcon" viewBox="0 0 24 24"><path d="M4 4h16v10H7l-3 3V4Z" fill="currentColor"/></svg>
@@ -161,6 +178,18 @@
     </div>
   </dialog>
 
+  <!-- Ask Notifications -->
+  <dialog id="notifyDialog">
+    <form method="dialog" style="padding:16px; text-align:center">
+      <h3 style="margin:0 0 8px; color:#14532d">Enable Notifications</h3>
+      <p class="muted">We’ll remind you exactly when it’s time to water or fertilize.</p>
+      <menu style="margin-top:10px">
+        <button id="notifyLater" type="button" class="btn ghost">Later</button>
+        <button id="notifyAllow" type="button" class="btn primary">Allow</button>
+      </menu>
+    </form>
+  </dialog>
+
   <!-- Profile -->
   <dialog id="profileDialog">
     <form id="profileForm" method="dialog" style="padding:18px 18px 10px;">
@@ -175,8 +204,8 @@
           <input id="displayNameInput" placeholder="Your name">
         </div>
         <div>
-          <label>Photo URL (optional)</label>
-          <input id="photoUrlInput" placeholder="https://">
+          <label>Upload new photo (optional)</label>
+          <input id="photoFileInput" type="file" accept="image/*">
         </div>
       </div>
       <menu style="margin-top:12px">
@@ -195,38 +224,50 @@
       <div id="detailsMeta" class="muted" style="margin-bottom:12px">Room • Next due • Last watered</div>
       <menu>
         <button type="button" id="detailsDeleteBtn" class="btn ghost" style="margin-right:auto">Delete</button>
+        <button type="button" id="detailsFertBtn" class="btn ghost">Fertilize</button>
         <button type="button" id="detailsCloseBtn" class="btn ghost">Close</button>
         <button type="button" id="detailsEditBtn" class="btn primary">Edit</button>
       </menu>
     </div>
   </dialog>
 
-  <!-- Plant & Room dialogs (unchanged fields) -->
+  <!-- Plant & Room dialogs -->
   <dialog id="plantDialog">
     <form id="plantForm" method="dialog">
       <h3 id="plantDialogTitle">Add plant</h3>
+
       <div class="row2">
         <div><label>Name</label><input name="name" required placeholder="Monstera"></div>
         <div><label>Nickname</label><input name="nickname" placeholder="Mo"></div>
       </div>
+
       <label>Photo</label>
       <input name="photo" type="file" accept="image/*">
+
       <div class="row2">
         <div><label>Plant type</label><input name="plantType" placeholder="Monstera deliciosa"></div>
         <div><label>Room</label><select name="location" id="roomSelect"></select></div>
       </div>
+
       <div class="row2">
         <div><label>Pot size cm</label><input name="potSize" type="number" min="5" max="40" step="1" value="15"></div>
         <div><label>Light level</label>
           <select name="lightLevel"><option value="medium">Medium</option><option value="bright">Bright</option><option value="low">Low</option></select>
         </div>
       </div>
+
       <div class="row2">
-        <div><label>Schedule</label>
+        <div><label>Water schedule</label>
           <select name="scheduleMode"><option value="suggested">Suggested</option><option value="custom">Custom</option></select>
         </div>
         <div><label>Custom interval days</label><input name="customIntervalDays" type="number" min="2" max="60" value="10"></div>
       </div>
+
+      <div class="row2">
+        <div><label>Water time (local)</label><input name="preferredWaterTime" type="time" value="09:00"></div>
+        <div><label>Fertilizer interval days</label><input name="fertilizerIntervalDays" type="number" min="7" max="180" value="30"></div>
+      </div>
+
       <menu>
         <button type="button" id="deletePlantBtn" class="btn ghost" style="margin-right:auto; display:none">Delete</button>
         <button type="button" id="cancelBtn" class="btn ghost">Cancel</button>
@@ -302,6 +343,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app_cloud.js?v=10"></script>
+  <script type="module" src="./app_cloud.js?v=12"></script>
 </body>
 </html>
