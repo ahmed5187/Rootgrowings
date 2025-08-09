@@ -1,8 +1,7 @@
-// app_cloud.js (full app) — popup-first Google sign-in, redirect fallback,
-// persistence, full rooms/plants CRUD, uploads with 2MB cap.
-//
-// In index.html include as:
-// <script type="module" src="./app_cloud.js?v=6"></script>
+// app_cloud.js — v7
+// Popup-first Google sign-in with redirect fallback, persistence,
+// profile modal, header plus button, toasts on add/edit/delete,
+// full Rooms/Plants CRUD, 2MB photo limit.
 
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -19,8 +18,23 @@ import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
+// ---------- helpers ----------
 const $ = s => document.querySelector(s);
 const DEFAULT_IMG = 'assets/tempplant.jpg';
+
+// lightweight toast helper
+function showToast(message){
+  let el = document.getElementById('toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2000);
+}
 
 // ---------- Build auth overlay ----------
 const authOverlay = document.createElement('div');
@@ -88,6 +102,14 @@ const removePlantForm = $('#removePlantForm');
 const plantEditSelect = $('#plantEditSelect');
 const plantRemoveSelect = $('#plantRemoveSelect');
 
+// header profile pieces from index.html
+const profileBtn = $('#profileBtn');
+const profileDialog = $('#profileDialog');
+const profileName = $('#profileName');
+const profileEmail = $('#profileEmail');
+const signOutBtn = $('#signOutBtn');
+
+// room/plant action buttons
 const btnAddRoom = $('#btnAddRoom');
 const btnEditRoom = $('#btnEditRoom');
 const btnRemoveRoom = $('#btnRemoveRoom');
@@ -172,6 +194,24 @@ showAppFrame(false);
       activate(homePage);
       startRoomsListener();
       startPlantsListener();
+
+      // header plus button navigates to settings only when on Home
+      if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
+
+      // profile modal wiring
+      if(profileBtn && profileDialog){
+        profileBtn.onclick = () => {
+          profileName.textContent = u.displayName || 'No Name';
+          profileEmail.textContent = u.email || '';
+          profileDialog.showModal();
+        };
+      }
+      if(signOutBtn){
+        signOutBtn.onclick = async () => {
+          await signOut(auth).catch(()=>{});
+          profileDialog?.close();
+        };
+      }
     }
 
     // ------- Nav -------
@@ -187,7 +227,6 @@ showAppFrame(false);
     if(navHome) navHome.onclick = () => activate(homePage);
     if(navSettings) navSettings.onclick = () => activate(settingsPage);
     if(navChat) navChat.onclick = () => activate(chatPage);
-    if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
 
     // ------- Firestore live listeners -------
     function startRoomsListener(){
@@ -294,6 +333,7 @@ showAppFrame(false);
     btnAddRoom.onclick = ()=>{ populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
     btnEditRoom.onclick = ()=>{ populateIconGrid(iconGridEdit); editRoomDialog.showModal(); };
     btnRemoveRoom.onclick = ()=> removeRoomDialog.showModal();
+
     addRoomCancel.onclick = ()=> addRoomDialog.close();
     editRoomCancel.onclick = ()=> editRoomDialog.close();
     $('#removeRoomCancel').onclick = ()=> removeRoomDialog.close();
@@ -306,6 +346,7 @@ showAppFrame(false);
       if(!name) return;
       await addDoc(collection(db,'users',auth.currentUser.uid,'rooms'),{ name, icon });
       addRoomDialog.close();
+      showToast('Room added');
     });
 
     editRoomForm.addEventListener('submit', async e=>{
@@ -322,6 +363,7 @@ showAppFrame(false);
         for(const p of plants.filter(p=>p.location===oldName)){ await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:newName }); }
       }
       editRoomDialog.close();
+      showToast('Room updated');
     });
 
     removeRoomForm.addEventListener('submit', async e=>{
@@ -331,6 +373,7 @@ showAppFrame(false);
       await deleteDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id));
       for(const p of plants.filter(p=>p.location===name)){ await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:'Unassigned' }); }
       removeRoomDialog.close();
+      showToast('Room removed');
     });
 
     // ------- Plants -------
@@ -361,9 +404,22 @@ showAppFrame(false);
       form.dataset.editing=id;
       dialog.showModal();
     }
-    deletePlantBtn.onclick = async ()=>{ const id=form.dataset.editing; if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); dialog.close(); };
-    editPlantChooserForm.addEventListener('submit', e=>{ e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); if(id){ editPlantChooser.close(); openEdit(id);} });
-    removePlantForm.addEventListener('submit', async e=>{ e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); removePlantDialog.close(); });
+    deletePlantBtn.onclick = async ()=>{ 
+      const id=form.dataset.editing; if(!id) return; 
+      await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
+      dialog.close(); 
+      showToast('Plant deleted');
+    };
+    editPlantChooserForm.addEventListener('submit', e=>{ 
+      e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); 
+      if(id){ editPlantChooser.close(); openEdit(id);} 
+    });
+    removePlantForm.addEventListener('submit', async e=>{ 
+      e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); 
+      if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
+      removePlantDialog.close(); 
+      showToast('Plant removed'); 
+    });
     cancelBtn.onclick = ()=>{ form.reset(); delete form.dataset.editing; dialog.close(); };
 
     form.addEventListener('submit', async e=>{
@@ -396,6 +452,7 @@ showAppFrame(false);
         };
         if(photoUrl) patch.photoUrl=photoUrl;
         await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',editing), patch);
+        showToast('Plant updated');
       } else {
         const p={
           name: fd.get('name'),
@@ -413,11 +470,12 @@ showAppFrame(false);
         };
         setNextDue(p);
         await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), p);
+        showToast('Plant added');
       }
       dialog.close();
     });
 
-    // optional sign out
+    // optional sign out on window for debugging
     window.RG_signOut = ()=> signOut(auth).catch(()=>{});
   })();
 })();
