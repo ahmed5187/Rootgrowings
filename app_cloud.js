@@ -1,10 +1,10 @@
-// app_cloud.js — v8
+// app_cloud.js — v9 (profile edit + close, centered toast)
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider,
   signInWithRedirect, getRedirectResult, signOut, signInWithPopup,
-  setPersistence, browserLocalPersistence
+  setPersistence, browserLocalPersistence, updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, addDoc, onSnapshot,
@@ -17,7 +17,7 @@ import {
 const $ = s => document.querySelector(s);
 const DEFAULT_IMG = 'assets/tempplant.jpg';
 
-// centered toast helper
+/* ---------- centered toast ---------- */
 function showToastCenter(msg){
   let box = document.getElementById('toast');
   let text = document.getElementById('toastText');
@@ -32,7 +32,7 @@ function showToastCenter(msg){
   setTimeout(()=> box.classList.remove('show'), 1800);
 }
 
-// ---------- Build auth overlay ----------
+/* ---------- full-screen auth overlay ---------- */
 const authOverlay = document.createElement('div');
 authOverlay.id = 'authOverlay';
 authOverlay.style.cssText = `
@@ -52,7 +52,7 @@ authOverlay.innerHTML = `
 `;
 document.body.appendChild(authOverlay);
 
-// ---------- App shell refs ----------
+/* ---------- app refs ---------- */
 const homePage = $('#homePage');
 const settingsPage = $('#settingsPage');
 const chatPage = $('#chatPage');
@@ -65,28 +65,21 @@ const settingsTitle = $('#settingsTitle');
 const homeContent = $('#homeContent');
 const homeEmpty = $('#homeEmpty');
 
-// dialogs + forms
+/* CRUD dialogs */
 const dialog = $('#plantDialog');
 const form = $('#plantForm');
 const cancelBtn = $('#cancelBtn');
 const deletePlantBtn = $('#deletePlantBtn');
 const plantDialogTitle = $('#plantDialogTitle');
 const roomSelect = $('#roomSelect');
-
 const addRoomDialog = $('#addRoomDialog');
 const addRoomForm = $('#addRoomForm');
 const addRoomCancel = $('#addRoomCancel');
-const iconGrid = $('#iconGrid');
-
 const editRoomDialog = $('#editRoomDialog');
 const editRoomForm = $('#editRoomForm');
 const editRoomCancel = $('#editRoomCancel');
-const roomEditSelect = $('#roomEditSelect');
-const iconGridEdit = $('#iconGridEdit');
-
 const removeRoomDialog = $('#removeRoomDialog');
 const removeRoomForm = $('#removeRoomForm');
-
 const editPlantChooser = $('#editPlantChooser');
 const editPlantChooserForm = $('#editPlantChooserForm');
 const editPlantCancel = $('#editPlantCancel');
@@ -95,14 +88,21 @@ const removePlantForm = $('#removePlantForm');
 const plantEditSelect = $('#plantEditSelect');
 const plantRemoveSelect = $('#plantRemoveSelect');
 
-// profile
+/* profile dialog refs */
 const profileBtn = $('#profileBtn');
 const profileDialog = $('#profileDialog');
+const profileView = $('#profileView');
 const profileName = $('#profileName');
 const profileEmail = $('#profileEmail');
+const profileClose = $('#profileClose');
+const editProfileBtn = $('#editProfileBtn');
+const profileForm = $('#profileForm');
+const profileNameInput = $('#profileNameInput');
+const profileEmailInput = $('#profileEmailInput');
+const cancelProfileBtn = $('#cancelProfileBtn');
 const signOutBtn = $('#signOutBtn');
 
-// buttons
+/* buttons in settings */
 const btnAddRoom = $('#btnAddRoom');
 const btnEditRoom = $('#btnEditRoom');
 const btnRemoveRoom = $('#btnRemoveRoom');
@@ -116,7 +116,7 @@ function showAppFrame(show){
 }
 showAppFrame(false);
 
-// ---------- App init ----------
+/* ---------- init ---------- */
 (function init(){
   (async () => {
     const app = initializeApp(firebaseConfig);
@@ -124,9 +124,9 @@ showAppFrame(false);
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    try { await setPersistence(auth, browserLocalPersistence); } catch{}
+    try { await setPersistence(auth, browserLocalPersistence); } catch {}
 
-    // popup first
+    // login popup first
     document.addEventListener('click', async e => {
       if (e.target && e.target.id === 'googleStart') {
         const provider = new GoogleAuthProvider();
@@ -142,16 +142,16 @@ showAppFrame(false);
       }
     });
 
-    try { const rr = await getRedirectResult(auth); if (rr?.user) bootstrapAfterLogin(rr.user); } catch{}
+    try { const rr = await getRedirectResult(auth); if (rr?.user) bootstrap(rr.user); } catch {}
 
     onAuthStateChanged(auth, (u) => {
       if (!u) { showAppFrame(false); authOverlay.style.display = 'flex'; return; }
-      bootstrapAfterLogin(u);
+      bootstrap(u);
     });
 
-    let bootstrapped = false, rooms = [], plants = [];
-    function bootstrapAfterLogin(u){
-      if (bootstrapped) return; bootstrapped = true;
+    let boot = false, rooms = [], plants = [];
+    function bootstrap(u){
+      if (boot) return; boot = true;
       authOverlay.style.display = 'none';
       showAppFrame(true);
       activate(homePage);
@@ -160,17 +160,52 @@ showAppFrame(false);
 
       // header actions
       if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
+
       if(profileBtn && profileDialog){
         profileBtn.onclick = () => {
           profileName.textContent = u.displayName || 'No Name';
           profileEmail.textContent = u.email || '';
+          profileNameInput.value = u.displayName || '';
+          profileEmailInput.value = u.email || '';
+          // view mode
+          profileView.style.display = '';
+          profileForm.style.display = 'none';
           profileDialog.showModal();
         };
       }
-      if(signOutBtn){ signOutBtn.onclick = async () => { await signOut(auth).catch(()=>{}); profileDialog?.close(); }; }
+      if(profileClose){ profileClose.onclick = () => profileDialog.close(); }
+      // click backdrop to close
+      profileDialog?.addEventListener('click', (e)=>{ if(e.target === profileDialog) profileDialog.close(); });
+
+      if(editProfileBtn){
+        editProfileBtn.onclick = () => {
+          profileView.style.display = 'none';
+          profileForm.style.display = 'block';
+          profileNameInput.focus();
+        };
+      }
+      if(cancelProfileBtn){
+        cancelProfileBtn.onclick = () => {
+          profileForm.style.display = 'none';
+          profileView.style.display = '';
+        };
+      }
+      if(profileForm){
+        profileForm.addEventListener('submit', async (e)=>{
+          e.preventDefault();
+          const newName = (profileNameInput.value || '').trim();
+          if(!newName){ alert('Please enter a name'); return; }
+          await updateProfile(auth.currentUser, { displayName: newName }).catch(()=>{});
+          profileName.textContent = newName;
+          profileView.style.display = '';
+          profileForm.style.display = 'none';
+          showToastCenter('Profile updated');
+        });
+      }
+      if(signOutBtn){ signOutBtn.onclick = async () => { await signOut(auth).catch(()=>{}); profileDialog.close(); }; }
     }
 
-    // NAV
+    /* NAV */
     function activate(page){
       for(const el of document.querySelectorAll('.page')) el.classList.remove('active');
       page.classList.add('active');
@@ -180,31 +215,31 @@ showAppFrame(false);
       if(page === chatPage){ navChat && navChat.classList.add('active'); plusBtn.style.display='none'; homeTitle.style.display='none'; settingsTitle.style.display='none'; }
       window.scrollTo({ top: 0, behavior: 'instant' });
     }
-    if(navHome) navHome.onclick = () => activate(homePage);
-    if(navSettings) navSettings.onclick = () => activate(settingsPage);
-    if(navChat) navChat.onclick = () => activate(chatPage);
+    navHome && (navHome.onclick = () => activate(homePage));
+    navSettings && (navSettings.onclick = () => activate(settingsPage));
+    navChat && (navChat.onclick = () => activate(chatPage));
 
-    // LISTENERS
+    /* LISTENERS */
     function startRoomsListener(){
-      const qref = collection(db, 'users', auth.currentUser.uid, 'rooms');
+      const qref = collection(db, 'users', getAuth().currentUser.uid, 'rooms');
       onSnapshot(qref, snap => {
         rooms = snap.docs.map(d => ({ id:d.id, ...d.data() }));
         if(rooms.length === 0){
           [{name:'Bedroom', icon:'🛏️'},{name:'Living room', icon:'🛋️'},{name:'Kitchen', icon:'🍽️'}]
-            .forEach(r => addDoc(collection(db, 'users', auth.currentUser.uid, 'rooms'), r));
+            .forEach(r => addDoc(collection(db, 'users', getAuth().currentUser.uid, 'rooms'), r));
         }
         renderRoomOptions(); renderHome(); renderPickers();
       });
     }
     function startPlantsListener(){
-      const qref = collection(db, 'users', auth.currentUser.uid, 'plants');
+      const qref = collection(db, 'users', getAuth().currentUser.uid, 'plants');
       onSnapshot(qref, snap => {
         plants = snap.docs.map(d => ({ id:d.id, ...d.data() }));
         renderHome(); renderPickers();
       });
     }
 
-    // helpers
+    /* helpers */
     const baseIntervalDays = (t)=>({ 'Monstera deliciosa':7,'Epipremnum aureum':7,'Spathiphyllum':6,'Sansevieria':14,'Ficus elastica':10 }[t]||8);
     const lightFactor = v => v==='bright'?0.8 : v==='low'?1.2 : 1.0;
     const seasonFactor = d => { const m=d.getMonth()+1; if(m>=6&&m<=8) return 0.9; if(m===12||m<=2) return 1.1; return 1.0; };
@@ -216,15 +251,15 @@ showAppFrame(false);
     const allRoomNames = ()=> rooms.map(r=>r.name);
     const groupByRoom = list => { const map={}; for(const r of rooms) map[r.name]=[]; for(const p of list){ const rn=p.location||'Unassigned'; if(!map[rn]) map[rn]=[]; map[rn].push(p);} return map; };
 
-    // renderers
+    /* rendering */
     function renderRoomOptions(){
       roomSelect.innerHTML = allRoomNames().map(r=>`<option value="${r}">${r}</option>`).join('');
     }
     function renderPickers(){
       $('#roomEditSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
       $('#roomRemoveSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      $('#plantEditSelect').innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
-      $('#plantRemoveSelect').innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
     }
     function renderHome(){
       const sorted=[...plants].sort((a,b)=>new Date(a.nextDueUtc)-new Date(b.nextDueUtc));
@@ -264,9 +299,9 @@ showAppFrame(false);
 
           const actions=document.createElement('div'); actions.className='actions';
           const water=document.createElement('button'); water.className='btn primary'; water.textContent='Water';
-          water.onclick=async()=>{ const ref=doc(db,'users',auth.currentUser.uid,'plants',p.id); const now=new Date().toISOString(); await updateDoc(ref,{lastWateredUtc:now,updatedAt:now}); };
+          water.onclick=async()=>{ const ref=doc(db,'users',getAuth().currentUser.uid,'plants',p.id); const now=new Date().toISOString(); await updateDoc(ref,{lastWateredUtc:now,updatedAt:now}); };
           const snooze=document.createElement('button'); snooze.className='btn ghost'; snooze.textContent='Snooze';
-          snooze.onclick=async()=>{ const d=new Date(p.nextDueUtc); d.setUTCDate(d.getUTCDate()+1); await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); };
+          snooze.onclick=async()=>{ const d=new Date(p.nextDueUtc); d.setUTCDate(d.getUTCDate()+1); await updateDoc(doc(db,'users',getAuth().currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); };
           actions.append(water,snooze);
 
           card.append(gear,photoWrap,title,meta,actions);
@@ -276,7 +311,7 @@ showAppFrame(false);
       }
     }
 
-    // icon grid
+    /* icon picker */
     function populateIconGrid(container){
       const icons=['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
       container.innerHTML=''; icons.forEach(ic=>{ const d=document.createElement('div'); d.className='iconPick'; d.textContent=ic;
@@ -284,8 +319,8 @@ showAppFrame(false);
       });
     }
 
-    // Rooms
-    btnAddRoom.onclick = ()=>{ populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
+    /* Rooms */
+    btnAddRoom.onclick = ()=>{ populateIconGrid($('#iconGrid')); addRoomForm.reset(); addRoomDialog.showModal(); };
     btnEditRoom.onclick = ()=>{ populateIconGrid($('#iconGridEdit')); editRoomDialog.showModal(); };
     btnRemoveRoom.onclick = ()=> removeRoomDialog.showModal();
     addRoomCancel.onclick = ()=> addRoomDialog.close();
@@ -298,7 +333,7 @@ showAppFrame(false);
       const name=(fd.get('roomName')||'').toString().trim();
       const icon=$('#iconGrid').querySelector('.iconPick.selected')?.textContent || '🏷️';
       if(!name) return;
-      await addDoc(collection(db,'users',auth.currentUser.uid,'rooms'),{ name, icon });
+      await addDoc(collection(db,'users',getAuth().currentUser.uid,'rooms'),{ name, icon });
       addRoomDialog.close();
       showToastCenter('Room added');
     });
@@ -309,13 +344,11 @@ showAppFrame(false);
       const oldName=fd.get('roomToEdit');
       const newName=(fd.get('newRoomName')||'').toString().trim();
       const newIcon=$('#iconGridEdit').querySelector('.iconPick.selected')?.textContent;
-      if(!oldName) return;
-      const roomDoc=(await (async()=>rooms.find(r=>r.name===oldName)))(); if(!roomDoc) return;
+      const roomsSnap = await new Promise(res => onSnapshot(collection(db,'users',getAuth().currentUser.uid,'rooms'), s=>res(s), {once:true}));
+      const roomsArr = roomsSnap.docs.map(d=>({id:d.id,...d.data()}));
+      const roomDoc=roomsArr.find(r=>r.name===oldName); if(!roomDoc) return;
       const patch={}; if(newName) patch.name=newName; if(newIcon) patch.icon=newIcon;
-      if(Object.keys(patch).length) await updateDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id),patch);
-      if(newName && newName!==oldName){
-        for(const p of plants.filter(p=>p.location===oldName)){ await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:newName }); }
-      }
+      if(Object.keys(patch).length) await updateDoc(doc(db,'users',getAuth().currentUser.uid,'rooms',roomDoc.id),patch);
       editRoomDialog.close();
       showToastCenter('Room updated');
     });
@@ -323,14 +356,15 @@ showAppFrame(false);
     removeRoomForm.addEventListener('submit', async e=>{
       e.preventDefault();
       const name=new FormData(removeRoomForm).get('roomToRemove');
-      const roomDoc=rooms.find(r=>r.name===name); if(!roomDoc) return;
-      await deleteDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id));
-      for(const p of plants.filter(p=>p.location===name)){ await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:'Unassigned' }); }
+      const roomsSnap = await new Promise(res => onSnapshot(collection(db,'users',getAuth().currentUser.uid,'rooms'), s=>res(s), {once:true}));
+      const roomsArr = roomsSnap.docs.map(d=>({id:d.id,...d.data()}));
+      const roomDoc=roomsArr.find(r=>r.name===name); if(!roomDoc) return;
+      await deleteDoc(doc(db,'users',getAuth().currentUser.uid,'rooms',roomDoc.id));
       removeRoomDialog.close();
       showToastCenter('Room removed');
     });
 
-    // Plants
+    /* Plants */
     btnAddPlant.onclick = ()=>openAdd();
     btnEditPlant.onclick = ()=>editPlantChooser.showModal();
     btnRemovePlant.onclick = ()=>removePlantDialog.showModal();
@@ -343,7 +377,9 @@ showAppFrame(false);
       form.reset(); renderRoomOptions(); delete form.dataset.editing; dialog.showModal();
     }
     function openEdit(id){
-      const p=plants.find(x=>x.id===id); if(!p) return;
+      const snap = await new Promise(res => onSnapshot(collection(db,'users',getAuth().currentUser.uid,'plants'), s=>res(s), {once:true}));
+      const arr = snap.docs.map(d=>({id:d.id,...d.data()}));
+      const p=arr.find(x=>x.id===id); if(!p) return;
       plantDialogTitle.textContent='Edit plant';
       deletePlantBtn.style.display='inline-block';
       form.reset(); renderRoomOptions();
@@ -360,7 +396,7 @@ showAppFrame(false);
     }
     deletePlantBtn.onclick = async ()=>{ 
       const id=form.dataset.editing; if(!id) return; 
-      await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
+      await deleteDoc(doc(db,'users',getAuth().currentUser.uid,'plants',id)); 
       dialog.close(); 
       showToastCenter('Plant deleted');
     };
@@ -370,7 +406,7 @@ showAppFrame(false);
     });
     removePlantForm.addEventListener('submit', async e=>{ 
       e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); 
-      if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
+      if(!id) return; await deleteDoc(doc(db,'users',getAuth().currentUser.uid,'plants',id)); 
       removePlantDialog.close(); 
       showToastCenter('Plant removed'); 
     });
@@ -385,7 +421,7 @@ showAppFrame(false);
 
       if(file && file.size && file.size>2*1024*1024){ alert('Image too large, max 2MB'); return; }
       if(file && file.size){
-        const path=`plants/${auth.currentUser.uid}/${editing || crypto.randomUUID()}.jpg`;
+        const path=`plants/${getAuth().currentUser.uid}/${editing || crypto.randomUUID()}.jpg`;
         const ref=sRef(storage, path);
         const bytes=await file.arrayBuffer();
         await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
@@ -405,7 +441,7 @@ showAppFrame(false);
           updatedAt: new Date().toISOString()
         };
         if(photoUrl) patch.photoUrl=photoUrl;
-        await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',editing), patch);
+        await updateDoc(doc(db,'users',getAuth().currentUser.uid,'plants',editing), patch);
         showToastCenter('Plant updated');
       } else {
         const p={
@@ -423,13 +459,13 @@ showAppFrame(false);
           updatedAt: new Date().toISOString()
         };
         setNextDue(p);
-        await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), p);
+        await addDoc(collection(db,'users',getAuth().currentUser.uid,'plants'), p);
         showToastCenter('Plant added');
       }
       dialog.close();
     });
 
-    // expose sign out for debugging
+    // expose for debugging
     window.RG_signOut = ()=> signOut(auth).catch(()=>{});
   })();
 })();
