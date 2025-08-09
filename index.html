@@ -12,10 +12,7 @@
     body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: var(--bg); color: var(--ink); }
 
     /* Header */
-    header {
-      position: sticky; top: 0; background: var(--bg);
-      padding: 8px 12px; border-bottom: 1px solid #e2eee7; z-index: 3;
-    }
+    header { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; border-bottom: 1px solid #e2eee7; z-index: 3; }
     .headWrap { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     header img.logo { height: 28px; width: auto; }
     .iconBar { display:flex; align-items:center; gap:10px; }
@@ -73,13 +70,22 @@
     .iconPick { border:1px solid #cfe0d6; border-radius:8px; padding:6px; cursor:pointer; background:#fff; }
     .iconPick.selected { outline:2px solid var(--green); }
 
-    /* Toast */
+    /* Center toast that doesn't block clicks */
     .toast {
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: #14532d; color: #fff; padding: 10px 16px; border-radius: 8px;
-      font-size: 14px; opacity: 0; transition: opacity .25s ease; z-index: 9999;
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%,-50%) scale(.98);
+      background: #14532d; color: #fff;
+      padding: 14px 18px; border-radius: 12px; font-size: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      opacity: 0; transition: opacity .25s ease, transform .25s ease;
+      z-index: 4; pointer-events: none;   /* important: does not block nav */
+      display:flex; align-items:center; gap:10px;
     }
-    .toast.show { opacity: 1; }
+    .toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    .toast .tick {
+      width:22px; height:22px; border-radius:999px; background:#fff; color:#14532d;
+      display:grid; place-items:center; font-weight:900;
+    }
   </style>
 </head>
 <body>
@@ -87,9 +93,7 @@
     <div class="headWrap">
       <img class="logo" src="assets/RGlogo.png" alt="RootGrowings">
       <div class="iconBar">
-        <!-- Plus button lives in header now -->
-        <button id="plusBtn" class="iconBtn" title="Add">➕</button>
-        <!-- Profile button -->
+        <button id="plusBtn" class="iconBtn" title="Add">+</button>
         <button id="profileBtn" class="iconBtn" title="Profile">👤</button>
       </div>
     </div>
@@ -284,11 +288,11 @@
     </form>
   </dialog>
 
-  <!-- Toast -->
-  <div id="toast" class="toast"></div>
+  <!-- Center toast container -->
+  <div id="toast" class="toast"><span class="tick">✓</span><span id="toastText"></span></div>
 
   <script type="module">
-    import './app_cloud.js?v=7';
+    import './app_cloud.js?v=8';
   </script>
 </body>
 </html>
