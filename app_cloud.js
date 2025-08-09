@@ -1,9 +1,17 @@
-// app_cloud.js  full app with auth overlay, redirect login, CDN imports
+// app_cloud.js — full app with auth overlay, redirect login, persistence,
+// Firestore listeners, CRUD, 2MB photo limit, default image.
+//
+// Requires in index.html:
+// <script type="module">
+//   import './app_cloud.js?v=3';
+// </script>
+
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider,
-  signInWithRedirect, getRedirectResult, signOut, signInWithPopup
+  signInWithRedirect, getRedirectResult, signOut, signInWithPopup,
+  setPersistence, browserLocalPersistence
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, addDoc, onSnapshot,
@@ -13,11 +21,11 @@ import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
-// helpers
+// ---------- helpers ----------
 const $ = s => document.querySelector(s);
 const DEFAULT_IMG = 'assets/tempplant.jpg';
 
-// sections
+// ---------- sections ----------
 const homePage = $('#homePage');
 const settingsPage = $('#settingsPage');
 const chatPage = $('#chatPage');
@@ -30,7 +38,7 @@ const settingsTitle = $('#settingsTitle');
 const homeContent = $('#homeContent');
 const homeEmpty = $('#homeEmpty');
 
-// dialogs and forms
+// ---------- dialogs and forms ----------
 const dialog = $('#plantDialog');
 const form = $('#plantForm');
 const cancelBtn = $('#cancelBtn');
@@ -69,7 +77,7 @@ const btnAddPlant = $('#btnAddPlant');
 const btnEditPlant = $('#btnEditPlant');
 const btnRemovePlant = $('#btnRemovePlant');
 
-// auth overlay
+// ---------- auth overlay ----------
 const authOverlay = document.createElement('div');
 authOverlay.id = 'authOverlay';
 authOverlay.style.cssText = `
@@ -100,13 +108,18 @@ function showAppFrame(show){
 }
 showAppFrame(false);
 
-// init firebase
+// ---------- Firebase init ----------
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// attach click with delegation, always present
+// Make the login persist across the redirect
+await setPersistence(auth, browserLocalPersistence).catch(e => {
+  console.error('setPersistence error:', e);
+});
+
+// Click handler (delegated so it always exists)
 document.addEventListener('click', async e => {
   if (e.target && e.target.id === 'googleStart') {
     const provider = new GoogleAuthProvider();
@@ -119,36 +132,45 @@ document.addEventListener('click', async e => {
         await signInWithPopup(auth, provider);
       } catch (e2) {
         console.error('signInWithPopup failed', e2);
-        alert('Sign in failed, check Google provider and authorized domains in Firebase Auth');
+        alert('Sign in failed. Check Google provider + Authorized domains in Firebase.');
       }
     }
   }
 });
 
-// surface redirect errors
-getRedirectResult(auth).catch(e => console.error('Redirect error', e));
+// ---------- After redirect: complete sign-in ASAP ----------
+try {
+  const res = await getRedirectResult(auth);
+  console.log('getRedirectResult user:', res?.user?.uid || '(none)');
+  if (res?.user) bootstrapAfterLogin(res.user);
+} catch (err) {
+  console.error('Redirect error:', err);
+}
 
-// state
-let user = null;
-let rooms = [];
-let plants = [];
-
-// auth state
-onAuthStateChanged(auth, u => {
-  user = u;
-  if (!user) {
+// Fallback: standard auth state listener
+onAuthStateChanged(auth, (u) => {
+  console.log('onAuthStateChanged:', u?.uid || '(no user)');
+  if (!u) {
     showAppFrame(false);
     authOverlay.style.display = 'flex';
     return;
   }
+  bootstrapAfterLogin(u);
+});
+
+// Start app once
+let bootstrapped = false;
+function bootstrapAfterLogin(u){
+  if (bootstrapped) return;
+  bootstrapped = true;
   authOverlay.style.display = 'none';
   showAppFrame(true);
   activate(homePage);
   startRoomsListener();
   startPlantsListener();
-});
+}
 
-// nav
+// ---------- nav ----------
 function activate(page){
   for(const el of document.querySelectorAll('.page')) el.classList.remove('active');
   page.classList.add('active');
@@ -163,8 +185,13 @@ if(navSettings) navSettings.onclick = () => activate(settingsPage);
 if(navChat) navChat.onclick = () => activate(chatPage);
 if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
 
-// listeners
+// ---------- Firestore listeners ----------
+let user = null;
+let rooms = [];
+let plants = [];
+
 function startRoomsListener(){
+  user = auth.currentUser;
   const qref = collection(db, 'users', user.uid, 'rooms');
   onSnapshot(qref, snap => {
     rooms = snap.docs.map(d => ({ id:d.id, ...d.data() }));
@@ -177,7 +204,9 @@ function startRoomsListener(){
     renderPickers();
   });
 }
+
 function startPlantsListener(){
+  user = auth.currentUser;
   const qref = collection(db, 'users', user.uid, 'plants');
   onSnapshot(qref, snap => {
     plants = snap.docs.map(d => ({ id:d.id, ...d.data() }));
@@ -186,7 +215,7 @@ function startPlantsListener(){
   });
 }
 
-// schedule helpers
+// ---------- schedule helpers ----------
 function baseIntervalDays(type){
   const map = { 'Monstera deliciosa':7, 'Epipremnum aureum':7, 'Spathiphyllum':6, 'Sansevieria':14, 'Ficus elastica':10 };
   return map[type] || 8;
@@ -221,7 +250,7 @@ function groupByRoom(list){
   return map;
 }
 
-// render
+// ---------- render ----------
 function renderRoomOptions(){
   roomSelect.innerHTML = allRoomNames().map(r => `<option value="${r}">${r}</option>`).join('');
 }
@@ -312,7 +341,7 @@ function renderHome(){
   }
 }
 
-// icon grid
+// ---------- icon grid ----------
 function populateIconGrid(container){
   const icons = ['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
   container.innerHTML = '';
@@ -329,7 +358,7 @@ function populateIconGrid(container){
   });
 }
 
-// rooms
+// ---------- rooms ----------
 btnAddRoom.onclick = () => { populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
 btnEditRoom.onclick = () => { populateIconGrid(iconGridEdit); editRoomDialog.showModal(); };
 btnRemoveRoom.onclick = () => removeRoomDialog.showModal();
@@ -381,7 +410,7 @@ removeRoomForm.addEventListener('submit', async e => {
   removeRoomDialog.close();
 });
 
-// plants
+// ---------- plants ----------
 btnAddPlant.onclick = () => openAdd();
 btnEditPlant.onclick = () => editPlantChooser.showModal();
 btnRemovePlant.onclick = () => removePlantDialog.showModal();
@@ -445,7 +474,7 @@ form.addEventListener('submit', async e => {
     return;
   }
   if(file && file.size){
-    const path = `plants/${user.uid}/${editing || crypto.randomUUID()}.jpg`;
+    const path = `plants/${auth.currentUser.uid}/${editing || crypto.randomUUID()}.jpg`;
     const ref = sRef(storage, path);
     const bytes = await file.arrayBuffer();
     await uploadBytes(ref, new Uint8Array(bytes), { contentType: file.type || 'image/jpeg' });
@@ -465,7 +494,7 @@ form.addEventListener('submit', async e => {
       updatedAt: new Date().toISOString()
     };
     if(photoUrl) patch.photoUrl = photoUrl;
-    await updateDoc(doc(db, 'users', user.uid, 'plants', editing), patch);
+    await updateDoc(doc(db, 'users', auth.currentUser.uid, 'plants', editing), patch);
   } else {
     const p = {
       name: fd.get('name'),
@@ -482,15 +511,15 @@ form.addEventListener('submit', async e => {
       updatedAt: new Date().toISOString()
     };
     setNextDue(p);
-    await addDoc(collection(db, 'users', user.uid, 'plants'), p);
+    await addDoc(collection(db, 'users', auth.currentUser.uid, 'plants'), p);
   }
   dialog.close();
 });
 
-// optional sign out helper if you want to add a button later
+// optional sign out helper
 window.RG_signOut = () => signOut(auth).catch(()=>{});
 
-// service worker optional
+// optional service worker
 try {
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js', { scope: location.pathname });
