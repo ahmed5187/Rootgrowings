@@ -3,7 +3,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider,
-  signInWithRedirect, getRedirectResult, signOut
+  signInWithRedirect, getRedirectResult, signOut, signInWithPopup
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, addDoc, onSnapshot,
@@ -62,7 +62,7 @@ const btnAddPlant = $("#btnAddPlant");
 const btnEditPlant = $("#btnEditPlant");
 const btnRemovePlant = $("#btnRemovePlant");
 
-// ---------- Inject full-screen Auth screen (no html changes needed) ----------
+// ---------- Inject full-screen Auth screen ----------
 const authOverlay = document.createElement("div");
 authOverlay.id = "authOverlay";
 authOverlay.style.cssText = `
@@ -96,12 +96,27 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Handle redirect result once after returning from Google
-getRedirectResult(auth).catch(()=>{}); // ignore if none
+// Surface redirect result errors to console
+getRedirectResult(auth).catch((e)=>{
+  console.error("Redirect result error:", e);
+});
 
+// Strong login handler: redirect first, popup fallback, error messages
 $("#googleStart").onclick = async () => {
   const provider = new GoogleAuthProvider();
-  await signInWithRedirect(auth, provider); // no popup
+  provider.setCustomParameters({ prompt: "select_account" });
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (err) {
+    console.error("signInWithRedirect failed:", err);
+    alert("Sign-in hiccup. Trying a popup now.");
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e2) {
+      console.error("signInWithPopup failed:", e2);
+      alert("Sign-in failed. Make sure Google sign-in is enabled and your domain is authorized in Firebase.");
+    }
+  }
 };
 
 // ---------- Auth state ----------
@@ -110,12 +125,10 @@ let user = null, rooms = [], plants = [];
 onAuthStateChanged(auth, async (u) => {
   user = u;
   if (!user) {
-    // Not signed in
     showAppFrame(false);
     authOverlay.style.display = "flex";
     return;
   }
-  // Signed in
   authOverlay.style.display = "none";
   showAppFrame(true);
   activate(homePage);
