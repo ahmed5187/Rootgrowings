@@ -1,8 +1,4 @@
-// app_cloud.js — v7
-// Popup-first Google sign-in with redirect fallback, persistence,
-// profile modal, header plus button, toasts on add/edit/delete,
-// full Rooms/Plants CRUD, 2MB photo limit.
-
+// app_cloud.js — v8
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
@@ -18,22 +14,22 @@ import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
-// ---------- helpers ----------
 const $ = s => document.querySelector(s);
 const DEFAULT_IMG = 'assets/tempplant.jpg';
 
-// lightweight toast helper
-function showToast(message){
-  let el = document.getElementById('toast');
-  if(!el){
-    el = document.createElement('div');
-    el.id = 'toast';
-    el.className = 'toast';
-    document.body.appendChild(el);
+// centered toast helper
+function showToastCenter(msg){
+  let box = document.getElementById('toast');
+  let text = document.getElementById('toastText');
+  if(!box){
+    box = document.createElement('div'); box.id='toast'; box.className='toast';
+    box.innerHTML = `<span class="tick">✓</span><span id="toastText"></span>`;
+    document.body.appendChild(box);
   }
-  el.textContent = message;
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'), 2000);
+  if(!text) text = document.getElementById('toastText');
+  text.textContent = msg;
+  box.classList.add('show');
+  setTimeout(()=> box.classList.remove('show'), 1800);
 }
 
 // ---------- Build auth overlay ----------
@@ -57,8 +53,6 @@ authOverlay.innerHTML = `
 document.body.appendChild(authOverlay);
 
 // ---------- App shell refs ----------
-const headerEl = document.querySelector('header');
-const footerEl = document.querySelector('footer');
 const homePage = $('#homePage');
 const settingsPage = $('#settingsPage');
 const chatPage = $('#chatPage');
@@ -92,7 +86,6 @@ const iconGridEdit = $('#iconGridEdit');
 
 const removeRoomDialog = $('#removeRoomDialog');
 const removeRoomForm = $('#removeRoomForm');
-const roomRemoveSelect = $('#roomRemoveSelect');
 
 const editPlantChooser = $('#editPlantChooser');
 const editPlantChooserForm = $('#editPlantChooserForm');
@@ -102,14 +95,14 @@ const removePlantForm = $('#removePlantForm');
 const plantEditSelect = $('#plantEditSelect');
 const plantRemoveSelect = $('#plantRemoveSelect');
 
-// header profile pieces from index.html
+// profile
 const profileBtn = $('#profileBtn');
 const profileDialog = $('#profileDialog');
 const profileName = $('#profileName');
 const profileEmail = $('#profileEmail');
 const signOutBtn = $('#signOutBtn');
 
-// room/plant action buttons
+// buttons
 const btnAddRoom = $('#btnAddRoom');
 const btnEditRoom = $('#btnEditRoom');
 const btnRemoveRoom = $('#btnRemoveRoom');
@@ -118,8 +111,6 @@ const btnEditPlant = $('#btnEditPlant');
 const btnRemovePlant = $('#btnRemovePlant');
 
 function showAppFrame(show){
-  if(headerEl) headerEl.style.display = show ? '' : 'none';
-  if(footerEl) footerEl.style.display = show ? '' : 'none';
   [homePage, settingsPage, chatPage].forEach(p => p && (p.style.display = show ? '' : 'none'));
   if(plusBtn) plusBtn.style.display = show ? 'block' : 'none';
 }
@@ -128,77 +119,47 @@ showAppFrame(false);
 // ---------- App init ----------
 (function init(){
   (async () => {
-    console.log('[RG] init start');
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-      console.log('[RG] persistence set');
-    } catch(e){ console.error('[RG] setPersistence error', e); }
+    try { await setPersistence(auth, browserLocalPersistence); } catch{}
 
-    // POPUP FIRST — redirect fallback
+    // popup first
     document.addEventListener('click', async e => {
       if (e.target && e.target.id === 'googleStart') {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
-
-        try {
-          console.log('[RG] starting POPUP sign-in');
-          await signInWithPopup(auth, provider);
-          console.log('[RG] popup success');
-        } catch (err) {
-          console.warn('[RG] popup failed', err?.code, err?.message);
-          if (err?.code === 'auth/operation-not-supported-in-this-environment' ||
-              err?.code === 'auth/popup-blocked') {
-            try {
-              console.log('[RG] falling back to REDIRECT sign-in');
-              await signInWithRedirect(auth, provider);
-            } catch (e2) {
-              console.error('[RG] redirect failed', e2?.code, e2?.message);
-              alert('Sign in failed. See console for details.');
-            }
-          } else if (err?.code !== 'auth/popup-closed-by-user' &&
-                     err?.code !== 'auth/cancelled-popup-request') {
-            alert('Sign in failed. See console for details.');
+        try { await signInWithPopup(auth, provider); }
+        catch (err) {
+          if (err?.code === 'auth/operation-not-supported-in-this-environment' || err?.code === 'auth/popup-blocked') {
+            await signInWithRedirect(auth, provider);
+          } else if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
+            alert('Sign in failed');
           }
         }
       }
     });
 
-    // Handle redirect result if present
-    try {
-      const rr = await getRedirectResult(auth);
-      console.log('[RG] getRedirectResult user:', rr?.user?.uid || '(none)');
-      if (rr?.user) bootstrapAfterLogin(rr.user);
-    } catch(err){ console.error('[RG] getRedirectResult error', err); }
+    try { const rr = await getRedirectResult(auth); if (rr?.user) bootstrapAfterLogin(rr.user); } catch{}
 
-    // Auth state
     onAuthStateChanged(auth, (u) => {
-      console.log('[RG] onAuthStateChanged:', u?.uid || '(no user)');
       if (!u) { showAppFrame(false); authOverlay.style.display = 'flex'; return; }
       bootstrapAfterLogin(u);
     });
 
-    // ------- Bootstrap once -------
     let bootstrapped = false, rooms = [], plants = [];
     function bootstrapAfterLogin(u){
-      if (bootstrapped) return;
-      bootstrapped = true;
-
-      console.log('[RG] bootstrapping UI for', u.uid);
+      if (bootstrapped) return; bootstrapped = true;
       authOverlay.style.display = 'none';
       showAppFrame(true);
       activate(homePage);
       startRoomsListener();
       startPlantsListener();
 
-      // header plus button navigates to settings only when on Home
+      // header actions
       if(plusBtn) plusBtn.onclick = () => activate(settingsPage);
-
-      // profile modal wiring
       if(profileBtn && profileDialog){
         profileBtn.onclick = () => {
           profileName.textContent = u.displayName || 'No Name';
@@ -206,15 +167,10 @@ showAppFrame(false);
           profileDialog.showModal();
         };
       }
-      if(signOutBtn){
-        signOutBtn.onclick = async () => {
-          await signOut(auth).catch(()=>{});
-          profileDialog?.close();
-        };
-      }
+      if(signOutBtn){ signOutBtn.onclick = async () => { await signOut(auth).catch(()=>{}); profileDialog?.close(); }; }
     }
 
-    // ------- Nav -------
+    // NAV
     function activate(page){
       for(const el of document.querySelectorAll('.page')) el.classList.remove('active');
       page.classList.add('active');
@@ -228,7 +184,7 @@ showAppFrame(false);
     if(navSettings) navSettings.onclick = () => activate(settingsPage);
     if(navChat) navChat.onclick = () => activate(chatPage);
 
-    // ------- Firestore live listeners -------
+    // LISTENERS
     function startRoomsListener(){
       const qref = collection(db, 'users', auth.currentUser.uid, 'rooms');
       onSnapshot(qref, snap => {
@@ -240,7 +196,6 @@ showAppFrame(false);
         renderRoomOptions(); renderHome(); renderPickers();
       });
     }
-
     function startPlantsListener(){
       const qref = collection(db, 'users', auth.currentUser.uid, 'plants');
       onSnapshot(qref, snap => {
@@ -249,7 +204,7 @@ showAppFrame(false);
       });
     }
 
-    // ------- Schedule helpers -------
+    // helpers
     const baseIntervalDays = (t)=>({ 'Monstera deliciosa':7,'Epipremnum aureum':7,'Spathiphyllum':6,'Sansevieria':14,'Ficus elastica':10 }[t]||8);
     const lightFactor = v => v==='bright'?0.8 : v==='low'?1.2 : 1.0;
     const seasonFactor = d => { const m=d.getMonth()+1; if(m>=6&&m<=8) return 0.9; if(m===12||m<=2) return 1.1; return 1.0; };
@@ -261,15 +216,15 @@ showAppFrame(false);
     const allRoomNames = ()=> rooms.map(r=>r.name);
     const groupByRoom = list => { const map={}; for(const r of rooms) map[r.name]=[]; for(const p of list){ const rn=p.location||'Unassigned'; if(!map[rn]) map[rn]=[]; map[rn].push(p);} return map; };
 
-    // ------- Render -------
+    // renderers
     function renderRoomOptions(){
       roomSelect.innerHTML = allRoomNames().map(r=>`<option value="${r}">${r}</option>`).join('');
     }
     function renderPickers(){
-      roomEditSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      roomRemoveSelect.innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
-      plantEditSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
-      plantRemoveSelect.innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      $('#roomEditSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+      $('#roomRemoveSelect').innerHTML = rooms.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+      $('#plantEditSelect').innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
+      $('#plantRemoveSelect').innerHTML = plants.map(p=>`<option value="${p.id}">${p.name} (${p.location||'Unassigned'})</option>`).join('');
     }
     function renderHome(){
       const sorted=[...plants].sort((a,b)=>new Date(a.nextDueUtc)-new Date(b.nextDueUtc));
@@ -321,7 +276,7 @@ showAppFrame(false);
       }
     }
 
-    // ------- Icon grid -------
+    // icon grid
     function populateIconGrid(container){
       const icons=['🛏️','🛋️','🍽️','🚿','🧺','🧑‍🍳','🖥️','🎮','📚','🧸','🚪','🌿','🔥','❄️','☕','🎧'];
       container.innerHTML=''; icons.forEach(ic=>{ const d=document.createElement('div'); d.className='iconPick'; d.textContent=ic;
@@ -329,11 +284,10 @@ showAppFrame(false);
       });
     }
 
-    // ------- Rooms -------
+    // Rooms
     btnAddRoom.onclick = ()=>{ populateIconGrid(iconGrid); addRoomForm.reset(); addRoomDialog.showModal(); };
-    btnEditRoom.onclick = ()=>{ populateIconGrid(iconGridEdit); editRoomDialog.showModal(); };
+    btnEditRoom.onclick = ()=>{ populateIconGrid($('#iconGridEdit')); editRoomDialog.showModal(); };
     btnRemoveRoom.onclick = ()=> removeRoomDialog.showModal();
-
     addRoomCancel.onclick = ()=> addRoomDialog.close();
     editRoomCancel.onclick = ()=> editRoomDialog.close();
     $('#removeRoomCancel').onclick = ()=> removeRoomDialog.close();
@@ -342,11 +296,11 @@ showAppFrame(false);
       e.preventDefault();
       const fd=new FormData(addRoomForm);
       const name=(fd.get('roomName')||'').toString().trim();
-      const icon=iconGrid.querySelector('.iconPick.selected')?.textContent || '🏷️';
+      const icon=$('#iconGrid').querySelector('.iconPick.selected')?.textContent || '🏷️';
       if(!name) return;
       await addDoc(collection(db,'users',auth.currentUser.uid,'rooms'),{ name, icon });
       addRoomDialog.close();
-      showToast('Room added');
+      showToastCenter('Room added');
     });
 
     editRoomForm.addEventListener('submit', async e=>{
@@ -354,16 +308,16 @@ showAppFrame(false);
       const fd=new FormData(editRoomForm);
       const oldName=fd.get('roomToEdit');
       const newName=(fd.get('newRoomName')||'').toString().trim();
-      const newIcon=iconGridEdit.querySelector('.iconPick.selected')?.textContent;
+      const newIcon=$('#iconGridEdit').querySelector('.iconPick.selected')?.textContent;
       if(!oldName) return;
-      const roomDoc=rooms.find(r=>r.name===oldName); if(!roomDoc) return;
+      const roomDoc=(await (async()=>rooms.find(r=>r.name===oldName)))(); if(!roomDoc) return;
       const patch={}; if(newName) patch.name=newName; if(newIcon) patch.icon=newIcon;
       if(Object.keys(patch).length) await updateDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id),patch);
       if(newName && newName!==oldName){
         for(const p of plants.filter(p=>p.location===oldName)){ await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:newName }); }
       }
       editRoomDialog.close();
-      showToast('Room updated');
+      showToastCenter('Room updated');
     });
 
     removeRoomForm.addEventListener('submit', async e=>{
@@ -373,10 +327,10 @@ showAppFrame(false);
       await deleteDoc(doc(db,'users',auth.currentUser.uid,'rooms',roomDoc.id));
       for(const p of plants.filter(p=>p.location===name)){ await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{ location:'Unassigned' }); }
       removeRoomDialog.close();
-      showToast('Room removed');
+      showToastCenter('Room removed');
     });
 
-    // ------- Plants -------
+    // Plants
     btnAddPlant.onclick = ()=>openAdd();
     btnEditPlant.onclick = ()=>editPlantChooser.showModal();
     btnRemovePlant.onclick = ()=>removePlantDialog.showModal();
@@ -408,7 +362,7 @@ showAppFrame(false);
       const id=form.dataset.editing; if(!id) return; 
       await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
       dialog.close(); 
-      showToast('Plant deleted');
+      showToastCenter('Plant deleted');
     };
     editPlantChooserForm.addEventListener('submit', e=>{ 
       e.preventDefault(); const id=new FormData(editPlantChooserForm).get('plantToEdit'); 
@@ -418,7 +372,7 @@ showAppFrame(false);
       e.preventDefault(); const id=new FormData(removePlantForm).get('plantToRemove'); 
       if(!id) return; await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',id)); 
       removePlantDialog.close(); 
-      showToast('Plant removed'); 
+      showToastCenter('Plant removed'); 
     });
     cancelBtn.onclick = ()=>{ form.reset(); delete form.dataset.editing; dialog.close(); };
 
@@ -452,7 +406,7 @@ showAppFrame(false);
         };
         if(photoUrl) patch.photoUrl=photoUrl;
         await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',editing), patch);
-        showToast('Plant updated');
+        showToastCenter('Plant updated');
       } else {
         const p={
           name: fd.get('name'),
@@ -470,12 +424,12 @@ showAppFrame(false);
         };
         setNextDue(p);
         await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), p);
-        showToast('Plant added');
+        showToastCenter('Plant added');
       }
       dialog.close();
     });
 
-    // optional sign out on window for debugging
+    // expose sign out for debugging
     window.RG_signOut = ()=> signOut(auth).catch(()=>{});
   })();
 })();
