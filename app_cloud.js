@@ -1,11 +1,11 @@
-// app_cloud.js v16
-// Matches index v15
-// - Home tab click ok
-// - Profile dialog wired
-// - Details shows last 5 logs table
-// - Rooms unique names, display ALL CAPS
-// - Water due time + fertilizer schedule
-// - Centered toast modal
+// app_cloud.js v14
+// - Direct Google button binding (popup first, redirect fallback)
+// - Null-safety guards throughout
+// - Rooms/plants CRUD with photo upload (2MB), due-time + fertilizer fields
+// - Per-plant logs -> Insights charts
+// - Local (foreground) notifications at due minute
+// - Profile edit (display name + avatar upload)
+// - Unique room names, centered cards, details modal + toasts
 
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -16,7 +16,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   getFirestore, collection, doc, addDoc, onSnapshot,
-  updateDoc, deleteDoc, getDocs, query, orderBy, limit
+  updateDoc, deleteDoc, getDocs
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL
@@ -25,7 +25,7 @@ import {
 const $ = s => document.querySelector(s);
 const DEFAULT_IMG = 'assets/tempplant.jpg';
 
-/* ---------- Auth overlay ---------- */
+/* ---------- Auth overlay (already in index.html, but button is here) ---------- */
 const authOverlay = document.createElement('div');
 authOverlay.style.cssText = `
   position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -39,6 +39,7 @@ authOverlay.innerHTML = `
     <button id="googleStart" style="width:100%; padding:12px 16px; font-weight:600; background:#14532d; color:#fff; border:none; border-radius:8px; cursor:pointer">
       Continue with Google
     </button>
+    <p style="font-size:12px; color:#678; margin-top:14px">By continuing you agree to our gentle watering reminders.</p>
   </div>`;
 document.body.appendChild(authOverlay);
 
@@ -101,20 +102,12 @@ const plantRemoveSelect = $('#plantRemoveSelect');
 
 /* profile */
 const profileDialog = $('#profileDialog');
-const fileNameEl = $('#fileName');
-photoFileInput?.addEventListener('change', () => {
-  fileNameEl && (fileNameEl.textContent = photoFileInput.files?.[0]?.name || '');
-});
 const profileForm = $('#profileForm');
 const profileAvatar = $('#profileAvatar');
 const profileName = $('#profileName');
 const profileEmail = $('#profileEmail');
 const displayNameInput = $('#displayNameInput');
 const photoFileInput = $('#photoFileInput');
-const fileNameEl = $('#fileName');
-photoFileInput?.addEventListener('change', () => {
-  fileNameEl && (fileNameEl.textContent = photoFileInput.files?.[0]?.name || '');
-});
 const closeProfile = $('#closeProfile');
 const signOutBtn = $('#signOutBtn');
 
@@ -127,8 +120,6 @@ const notifyLater = $('#notifyLater');
 const toastDialog = $('#toastDialog');
 const toastMsg = $('#toastMsg');
 const toastOk = $('#toastOk');
-function showToast(msg='Saved'){ if (toastMsg && toastDialog){ toastMsg.textContent=msg; toastDialog.showModal(); } }
-toastOk?.addEventListener('click', ()=> toastDialog.close());
 
 /* details */
 const plantDetailsDialog = $('#plantDetailsDialog');
@@ -139,7 +130,6 @@ const detailsEditBtn = $('#detailsEditBtn');
 const detailsDeleteBtn = $('#detailsDeleteBtn');
 const detailsCloseBtn = $('#detailsCloseBtn');
 const detailsFertBtn = $('#detailsFertBtn');
-const detailsLogs = $('#detailsLogs');
 
 /* insights charts */
 const chart14Water = $('#chart14Water');
@@ -148,33 +138,41 @@ const chartByPlant = $('#chartByPlant');
 const chartByRoomWater = $('#chartByRoomWater');
 const chartByRoomFert = $('#chartByRoomFert');
 
+function showToast(msg='Saved'){ if (toastMsg && toastDialog){ toastMsg.textContent=msg; toastDialog.showModal(); } }
+toastOk?.addEventListener('click', ()=> toastDialog.close());
+
+notifyAllow?.addEventListener('click', async ()=>{ try{ await Notification.requestPermission(); }catch{} notifyDialog.close(); });
+notifyLater?.addEventListener('click', ()=> notifyDialog.close());
+
 /* ---------- App init ---------- */
 (function init(){
   (async () => {
+    console.log('[RG] init');
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    try { await setPersistence(auth, browserLocalPersistence); } catch {}
+    // bind Google button immediately
+    bindGoogleButton(auth);
 
-    document.addEventListener('click', async (e) => {
-      if (e.target && e.target.id === 'googleStart') {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        try { await signInWithPopup(auth, provider); }
-        catch (err) {
-          if (err?.code === 'auth/operation-not-supported-in-this-environment' || err?.code === 'auth/popup-blocked') {
-            await signInWithRedirect(auth, provider).catch(()=>{});
-          }
-        }
-      }
-    });
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      console.log('[RG] persistence set');
+    } catch(e) {
+      console.warn('[RG] persistence error', e?.code);
+    }
 
-    try { const rr = await getRedirectResult(auth); if (rr?.user) boot(rr.user); } catch {}
+    // Handle redirect result (if popup fell back)
+    try {
+      const rr = await getRedirectResult(auth);
+      if (rr?.user) console.log('[RG] redirect result user:', rr.user.uid);
+    } catch(err){ console.error('[RG] getRedirectResult error', err); }
 
     onAuthStateChanged(auth, (u) => {
+      console.log('[RG] auth state:', u?.uid || '(none)');
       if (!u) {
+        // hide app chrome; show overlay
         Object.values(pages).forEach(p => p && (p.style.display='none'));
         authOverlay.style.display='flex';
         return;
@@ -206,6 +204,43 @@ const chartByRoomFert = $('#chartByRoomFert');
       nav.settings?.addEventListener('click', ()=> activate('settings'));
       nav.insights?.addEventListener('click', ()=>{ activate('insights'); renderInsights(); });
       nav.chat?.addEventListener('click', ()=> activate('chat'));
+
+      /* -------- Profile -------- */
+      async function openProfile(){
+        const u = auth.currentUser; if(!u) return;
+        profileName && (profileName.textContent = u.displayName || 'Plant lover');
+        profileEmail && (profileEmail.textContent = u.email || '');
+        profileAvatar && (profileAvatar.src = u.photoURL || 'assets/RGicon.jpg');
+        displayNameInput && (displayNameInput.value = u.displayName || '');
+        if (photoFileInput) photoFileInput.value = '';
+        profileDialog?.showModal();
+      }
+      window.openProfile = openProfile;
+
+      closeProfile?.addEventListener('click', ()=> profileDialog.close());
+      signOutBtn?.addEventListener('click', ()=> signOut(auth).catch(()=>{}).finally(()=>profileDialog.close()));
+      profileForm?.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const u=auth.currentUser; if(!u) return;
+
+        let newPhotoURL = null;
+        const file = photoFileInput?.files?.[0];
+        if (file && file.size){
+          if (file.size > 2*1024*1024){ alert('Image too large, max 2MB'); return; }
+          const ref = sRef(storage, `avatars/${u.uid}.jpg`);
+          const bytes = await file.arrayBuffer();
+          await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
+          newPhotoURL = await getDownloadURL(ref);
+        }
+        try{
+          await updateProfile(u,{
+            displayName: (displayNameInput?.value || '').trim() || null,
+            photoURL: newPhotoURL || u.photoURL || null
+          });
+          showToast('Profile updated');
+        }catch{ showToast('Could not update profile'); }
+        profileDialog?.close();
+      });
     }
 
     function activate(key){
@@ -218,42 +253,7 @@ const chartByRoomFert = $('#chartByRoomFert');
       window.scrollTo({ top:0, behavior:'instant' });
     }
 
-    /* -------- Profile -------- */
-    async function openProfile(){
-      const u = auth.currentUser; if(!u) return;
-      if (profileName) profileName.textContent = u.displayName || 'Plant lover';
-      if (profileEmail) profileEmail.textContent = u.email || '';
-      if (profileAvatar) profileAvatar.src = u.photoURL || 'assets/RGicon.jpg';
-      if (displayNameInput) displayNameInput.value = u.displayName || '';
-      if (photoFileInput) photoFileInput.value = '';
-      profileDialog?.showModal();
-    }
-    closeProfile?.addEventListener('click', ()=> profileDialog.close());
-    signOutBtn?.addEventListener('click', ()=> signOut(auth).catch(()=>{}).finally(()=>profileDialog.close()));
-    profileForm?.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const u=auth.currentUser; if(!u) return;
-
-      let newPhotoURL = null;
-      const file = photoFileInput?.files?.[0];
-      if (file && file.size){
-        if (file.size > 2*1024*1024){ alert('Image too large, max 2MB'); return; }
-        const ref = sRef(storage, `avatars/${u.uid}.jpg`);
-        const bytes = await file.arrayBuffer();
-        await uploadBytes(ref, new Uint8Array(bytes), { contentType:file.type||'image/jpeg' });
-        newPhotoURL = await getDownloadURL(ref);
-      }
-      try{
-        await updateProfile(u,{
-          displayName: (displayNameInput?.value || '').trim() || null,
-          photoURL: newPhotoURL || u.photoURL || null
-        });
-        showToast('Profile updated');
-      }catch{ showToast('Could not update profile'); }
-      profileDialog?.close();
-    });
-
-    /* -------- Live listeners -------- */
+    /* -------- Listeners -------- */
     function startRooms(){
       const q = collection(db,'users',auth.currentUser.uid,'rooms');
       onSnapshot(q, s=>{
@@ -284,7 +284,7 @@ const chartByRoomFert = $('#chartByRoomFert');
       const base = baseDateISO ? new Date(baseDateISO) : new Date();
       const [hh,mm] = (hhmm||'09:00').split(':').map(n=>parseInt(n,10));
       const n = new Date(base);
-      n.setSeconds(0); n.setMilliseconds(0);
+      n.setMinutes(0); n.setSeconds(0); n.setMilliseconds(0);
       n.setDate(n.getDate()+intervalDays);
       n.setHours(hh||9, mm||0, 0, 0);
       return n.toISOString();
@@ -328,13 +328,13 @@ const chartByRoomFert = $('#chartByRoomFert');
 
           const card=document.createElement('div'); card.className='card';
           card.addEventListener('click', (e)=>{
-            if (e.target.closest?.('.gear') || e.target.closest?.('.btn')) return;
+            if (e.target.closest('.gear') || e.target.closest('.btn')) return;
             openDetails(p.id);
           });
 
-          const gear=document.createElement('button'); gear.type='button'; gear.className='gear';
+          const gear=document.createElement('button'); gear.className='gear';
           gear.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a7.4 7.4 0 0 0-.1-1l2-1.6-2-3.5-2.4 1a7.5 7.5 0 0 0-1.7-1l-.4-2.6H9.2l-.4 2.6c-.6.2-1.2.5-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.2 1.2-.5 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.6.1-1Z" fill="currentColor"/></svg>`;
-          gear.addEventListener('click', (e)=>{ e.stopPropagation(); openEdit(p.id); });
+          gear.onclick=()=>openEdit(p.id);
 
           const photoWrap=document.createElement('div'); photoWrap.className='photoWrap';
           const img=document.createElement('div'); img.className='photo';
@@ -344,17 +344,17 @@ const chartByRoomFert = $('#chartByRoomFert');
           photoWrap.append(img, ring);
 
           const title=document.createElement('div');
-          const due = p.nextDueUtc ? new Date(p.nextDueUtc).toLocaleString() : '—';
+          const dueStr = p.nextDueUtc ? new Date(p.nextDueUtc).toLocaleString() : '—';
           title.innerHTML=`<div class="name">${p.name}</div><div class="nick">${p.nickname||''}</div>`;
 
           const meta=document.createElement('div'); meta.className='meta';
-          meta.textContent = `Next due ${due}`;
+          meta.textContent = `Next due ${dueStr}`;
 
           const actions=document.createElement('div'); actions.className='actions';
-          const water=document.createElement('button'); water.type='button'; water.className='btn primary'; water.textContent='Water';
-          water.addEventListener('click', async(e)=>{ e.stopPropagation(); await markWatered(p.id); });
-          const snooze=document.createElement('button'); snooze.type='button'; snooze.className='btn ghost'; snooze.textContent='Snooze';
-          snooze.addEventListener('click', async(e)=>{ e.stopPropagation(); const d=new Date(p.nextDueUtc||new Date()); d.setUTCMinutes(d.getUTCMinutes()+60*24); await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); showToast('Snoozed 1 day'); });
+          const water=document.createElement('button'); water.className='btn primary'; water.textContent='Water';
+          water.onclick=async(e)=>{ e.stopPropagation(); await markWatered(p.id); };
+          const snooze=document.createElement('button'); snooze.className='btn ghost'; snooze.textContent='Snooze';
+          snooze.onclick=async(e)=>{ e.stopPropagation(); const d=p.nextDueUtc?new Date(p.nextDueUtc):new Date(); d.setUTCMinutes(d.getUTCMinutes()+60*24); await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',p.id),{nextDueUtc:d.toISOString(),updatedAt:new Date().toISOString()}); showToast('Snoozed 1 day'); };
           actions.append(water,snooze);
 
           card.append(gear,photoWrap,title,meta,actions);
@@ -383,69 +383,34 @@ const chartByRoomFert = $('#chartByRoomFert');
       const ref = doc(db,'users',auth.currentUser.uid,'plants',plantId);
       const p = plants.find(x=>x.id===plantId); if(!p) return;
       const days = Number(p.fertilizerIntervalDays || 30);
-      const next = toNextWithTime(new Date().toISOString(), days, p.preferredFertilizerTime || p.preferredWaterTime || '09:00');
+      const next = toNextWithTime(new Date().toISOString(), days, p.preferredWaterTime || '09:00');
       await updateDoc(ref,{ lastFertilizedUtc:new Date().toISOString(), nextFertilizeUtc: next, updatedAt:new Date().toISOString() });
       await addLog(plantId,'fertilize');
       showToast('Fertilized');
     }
 
-    async function openDetails(id){
+    function openDetails(id){
       const p = plants.find(x=>x.id===id); if(!p) return;
       currentDetailsId = id;
       detailsImage && (detailsImage.style.backgroundImage = `url('${p.photoUrl || DEFAULT_IMG}')`);
       detailsTitle && (detailsTitle.textContent = p.name + (p.nickname ? ` (${p.nickname})` : ''));
       const meta = [
-        (p.location || 'Unassigned'),
-        `Water next ${p.nextDueUtc ? new Date(p.nextDueUtc).toLocaleString() : '—'}`,
-        `Fertilize next ${p.nextFertilizeUtc ? new Date(p.nextFertilizeUtc).toLocaleString() : '—'}`
+        (p.location || 'UNASSIGNED'),
+        `Water: next ${p.nextDueUtc ? new Date(p.nextDueUtc).toLocaleString() : '—'}`,
+        `Fertilize: next ${p.nextFertilizeUtc ? new Date(p.nextFertilizeUtc).toLocaleString() : '—'}`
       ].join(' • ');
       detailsMeta && (detailsMeta.textContent = meta);
-
-      // last 5 logs water and fertilize
-      if (detailsLogs){
-        detailsLogs.innerHTML = 'Loading...';
-        const logsQ = query(
-          collection(db,'users',auth.currentUser.uid,'plants',id,'logs'),
-          orderBy('ts','desc'),
-          limit(10)
-        );
-        const snap = await getDocs(logsQ);
-        const rows = [];
-        snap.forEach(d=>{
-          const L=d.data();
-          const when = new Date(L.ts).toLocaleString();
-          const kind = L.type==='water' ? 'Water' : L.type==='fertilize' ? 'Fertilizer' : L.type;
-          rows.push(`<tr><td style="padding:6px 10px">${kind}</td><td style="padding:6px 10px">${when}</td></tr>`);
-        });
-        const top5 = rows.slice(0,5).join('');
-        detailsLogs.innerHTML = `
-          <table style="width:100%; border-collapse:separate; border-spacing:0 4px; font-size:12px; color:#355747">
-            <thead><tr><th style="text-align:left; padding:4px 10px">Type</th><th style="text-align:left; padding:4px 10px">When</th></tr></thead>
-            <tbody>${top5 || `<tr><td colspan="2" style="padding:8px 10px">No logs yet</td></tr>`}</tbody>
-          </table>
-        `;
-      }
-
-      detailsEditBtn?.replaceWith(detailsEditBtn.cloneNode(true));
-      detailsDeleteBtn?.replaceWith(detailsDeleteBtn.cloneNode(true));
-      detailsFertBtn?.replaceWith(detailsFertBtn.cloneNode(true));
-      const editBtn = $('#detailsEditBtn');
-      const delBtn = $('#detailsDeleteBtn');
-      const fertBtn = $('#detailsFertBtn');
-
-      editBtn?.addEventListener('click', ()=> { plantDetailsDialog.close(); if(currentDetailsId) openEdit(currentDetailsId); });
-      delBtn?.addEventListener('click', async ()=>{
-        if(!currentDetailsId) return;
-        await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',currentDetailsId));
-        plantDetailsDialog.close();
-        showToast('Plant deleted');
-      });
-      fertBtn?.addEventListener('click', async ()=>{ if(currentDetailsId){ await markFertilized(currentDetailsId); plantDetailsDialog.close(); } });
-
-      detailsCloseBtn?.addEventListener('click', ()=> plantDetailsDialog.close(), { once:true });
-
       plantDetailsDialog?.showModal();
     }
+    detailsCloseBtn?.addEventListener('click', ()=> plantDetailsDialog.close());
+    detailsEditBtn?.addEventListener('click', ()=> { plantDetailsDialog.close(); if(currentDetailsId) openEdit(currentDetailsId); });
+    detailsDeleteBtn?.addEventListener('click', async ()=>{
+      if(!currentDetailsId) return;
+      await deleteDoc(doc(db,'users',auth.currentUser.uid,'plants',currentDetailsId));
+      plantDetailsDialog.close();
+      showToast('Plant deleted');
+    });
+    detailsFertBtn?.addEventListener('click', async ()=>{ if(currentDetailsId){ await markFertilized(currentDetailsId); plantDetailsDialog.close(); } });
 
     /* -------- Icon grid -------- */
     function populateIconGrid(container){
@@ -547,6 +512,7 @@ const chartByRoomFert = $('#chartByRoomFert');
       plantForm.querySelector('[name="customIntervalDays"]').value=p.customIntervalDays||10;
       plantForm.querySelector('[name="preferredWaterTime"]').value=p.preferredWaterTime||'09:00';
       plantForm.querySelector('[name="fertilizerIntervalDays"]').value=p.fertilizerIntervalDays||30;
+
       plantForm.dataset.editing=id;
       plantDialog?.showModal();
     }
@@ -595,7 +561,7 @@ const chartByRoomFert = $('#chartByRoomFert');
         await updateDoc(doc(db,'users',auth.currentUser.uid,'plants',editing), patch);
         showToast('Plant updated');
       } else {
-        const pnew = {
+        const dummy = {
           name: fd.get('name'),
           nickname: fd.get('nickname')||'',
           photoUrl: photoUrl || DEFAULT_IMG,
@@ -612,11 +578,11 @@ const chartByRoomFert = $('#chartByRoomFert');
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        const nextWater = toNextWithTime(pnew.lastWateredUtc, calcIntervalDays(pnew), preferredWaterTime);
+        const nextWater = toNextWithTime(dummy.lastWateredUtc, calcIntervalDays(dummy), preferredWaterTime);
         const nextFert = toNextWithTime(new Date().toISOString(), fertDays, preferredWaterTime);
-        pnew.nextDueUtc = nextWater;
-        pnew.nextFertilizeUtc = nextFert;
-        await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), pnew);
+        dummy.nextDueUtc = nextWater;
+        dummy.nextFertilizeUtc = nextFert;
+        await addDoc(collection(db,'users',auth.currentUser.uid,'plants'), dummy);
         showToast('Plant added');
       }
       plantDialog?.close();
@@ -707,6 +673,30 @@ const chartByRoomFert = $('#chartByRoomFert');
       });
 
       svgEl.innerHTML += `<text x="${PAD-6}" y="${PAD-6}" text-anchor="end" font-size="10" fill="#4a7c63">${max}</text>`;
+    }
+
+    /* ---------- Google button binder ---------- */
+    function bindGoogleButton(authInstance){
+      const btn = document.getElementById('googleStart');
+      if (!btn) return;
+      btn.onclick = async (e) => {
+        e.preventDefault();
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        try {
+          console.log('[RG] Google sign-in via POPUP');
+          await signInWithPopup(authInstance, provider);
+        } catch (err) {
+          console.warn('[RG] Popup failed:', err?.code);
+          try {
+            console.log('[RG] Falling back to REDIRECT');
+            await signInWithRedirect(authInstance, provider);
+          } catch (e2) {
+            console.error('[RG] Redirect failed:', e2?.code, e2?.message);
+            alert('Sign-in failed. Please try again or disable popup blockers.');
+          }
+        }
+      };
     }
 
   })();
