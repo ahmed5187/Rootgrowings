@@ -101,6 +101,10 @@ const plantRemoveSelect = $('#plantRemoveSelect');
 
 /* profile */
 const profileDialog = $('#profileDialog');
+const fileNameEl = $('#fileName');
+photoFileInput?.addEventListener('change', () => {
+  fileNameEl && (fileNameEl.textContent = photoFileInput.files?.[0]?.name || '');
+});
 const profileForm = $('#profileForm');
 const profileAvatar = $('#profileAvatar');
 const profileName = $('#profileName');
