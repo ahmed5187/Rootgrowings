@@ -111,6 +111,10 @@ const profileName = $('#profileName');
 const profileEmail = $('#profileEmail');
 const displayNameInput = $('#displayNameInput');
 const photoFileInput = $('#photoFileInput');
+const fileNameEl = $('#fileName');
+photoFileInput?.addEventListener('change', () => {
+  fileNameEl && (fileNameEl.textContent = photoFileInput.files?.[0]?.name || '');
+});
 const closeProfile = $('#closeProfile');
 const signOutBtn = $('#signOutBtn');
 
